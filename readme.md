@@ -137,5 +137,3 @@ For community projects (e.g., fishing co-op, Poker Run), symbolic hostnames (`ma
 ## 📜 License
 
 MIT License – free to use, modify, and distribute.
-
-If you need this delivered as a .txt file exactly, I can output it again with the Markdown intact but wrapped for direct saving.
