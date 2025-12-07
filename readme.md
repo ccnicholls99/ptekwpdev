@@ -1,8 +1,3 @@
-**Fixing the formatting issue**
-
-Okay, the user pointed out a formatting issue. I need to respond in correctly formatted Markdown. It seems like the problem might be due to the nested code fences, so I’ll give them the raw Markdown without wrapping it in triple backticks. I’ll make sure to follow the formatting rules and use appropriate headings. No need for citations here. I’ll briefly apologize for the mix-up and deliver the clean, correct Markdown output. Alright, let's get this sorted!
-Got it — sorry about the formatting hiccup. Here’s the full README in clean Markdown, no nested code blocks or extra wrappers.
-
 # PtekWPDev – Local WordPress Development Environment Manager
 
 PtekWPDev is a Bash-based application for Ubuntu that automates the build, test, and deployment of local WordPress development environments using Docker. It provides simple commands to **create**, **edit**, and **teardown** complete WordPress stacks, ensuring each environment is standalone and Git-ready.
