@@ -41,7 +41,7 @@ ptekwpdev/
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourorg/ptekwpdev.git ~/projects/ptekwpdev
+   git clone https://github.com/ccnicholls99/ptekwpdev.git ~/projects/ptekwpdev
    cd ~/projects/ptekwpdev
 
 2. Run the setup script:
