@@ -1,29 +1,65 @@
-#! /bin/bash
+#!/usr/bin/env bash
+# Unified logging functions for PtekWPDev
+# Prints to stdout (with colors) and appends to logfile
 
-#>>
-# Various Terminal Output Functions
-#<< see do_help_doc()
-NoColor='\033[0m'           # Text Reset
-BGreen='\033[1;32m'        # Yellow
-BYellow='\033[1;33m'        # Yellow
-BCyan='\033[1;36m'          # Cyan
+LOGFILE="${LOGFILE:-${HOME}/.ptekwpdev/setup.log}"
 
-# Print an error meesage
-# $1 == Message
-function print_error() {
-    if [[ -z "$1" ]]; then exit 1; fi
-    echo -e "${BYellow}$1${NoColor}" >&2
+# ANSI color codes
+COLOR_RESET="\033[0m"
+COLOR_INFO="\033[34m"     # Blue
+COLOR_SUCCESS="\033[32m"  # Green
+COLOR_WARN="\033[33m"     # Yellow
+COLOR_ERROR="\033[31m"    # Red
+COLOR_DEBUG="\033[35m"    # Magenta
+
+# Default verbosity: normal (1)
+VERBOSE=1
+
+# Parse CLI args for quiet/debug
+for arg in "$@"; do
+  case "$arg" in
+    -q|--quiet)
+      VERBOSE=0
+      ;;
+    --debug)
+      VERBOSE=2
+      ;;
+  esac
+done
+
+timestamp() {
+  date +"%Y-%m-%d %H:%M:%S"
 }
 
-# Print an error meesage
-# $1 == Message
-function print_warning() {
-    if [[ -z "$1" ]]; then exit 1; fi
-    echo -e "${BCyan}$1${NoColor}" >&2 
+_log() {
+  local level="$1"; shift
+  local color="$1"; shift
+  local msg="$*"
+  local ts
+  ts="$(timestamp)"
+
+  # Decide whether to print based on verbosity
+  case "$level" in
+    INFO|SUCCESS|WARN)
+      [[ "$VERBOSE" -ge 1 ]] || return
+      ;;
+    ERROR)
+      [[ "$VERBOSE" -ge 0 ]] || return
+      ;;
+    DEBUG)
+      [[ "$VERBOSE" -ge 2 ]] || return
+      ;;
+  esac
+
+  # Print to stdout with color
+  echo -e "${color}[${ts}] [${level}]${COLOR_RESET} $msg"
+
+  # Append to logfile without color codes
+  echo "[${ts}] [${level}] $msg" >> "$LOGFILE"
 }
-# Print an error meesage
-# $1 == Message
-function print_success() {
-    if [[ -z "$1" ]]; then exit 1; fi
-    echo -e "${BGreen}$1${NoColor}" >&2 
-}
+
+info()    { _log "INFO"    "$COLOR_INFO"    "$*"; }
+success() { _log "SUCCESS" "$COLOR_SUCCESS" "$*"; }
+warn()    { _log "WARN"    "$COLOR_WARN"    "$*"; }
+error()   { _log "ERROR"   "$COLOR_ERROR"   "$*"; }
+debug()   { _log "DEBUG"   "$COLOR_DEBUG"   "$*"; }
