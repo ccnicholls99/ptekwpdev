@@ -1,52 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Target App Configuration in user/home
-BUILD_HOME="$(dirname "$0")"
+APP_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_BASE="${HOME}/.ptekwpdev"
 CONFIG_FILE="${CONFIG_BASE}/environments.json"
 
-# Default verbosity: normal (1)
-VERBOSE=1
-
-usage() {
-  echo "Usage: $0 [-q|--quiet] [-d|--debug] [-h|--help]"
-  echo "  -q, --quiet    Quiet mode (only errors)"
-  echo "  -d, --debug    Debug mode (verbose + debug messages)"
-  echo "  -h, --help     Show this help message"
-  exit 0
-}
-
-# === Unified option loop ===
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    -q|--quiet) VERBOSE=0; shift ;;
-    -d|--debug) VERBOSE=2; shift ;;
-    -h|--help)  usage ;;
-    -*)
-      echo "Unknown option: $1" >&2
-      usage
-      ;;
-    *)
-      shift
-      ;;
-  esac
-done
-
-export VERBOSE
-
-# Source logging functions
-source "$BUILD_HOME/lib/output.sh"
-
-ensure_dir() {
-  local dir="$1"
-  if [[ ! -d "$dir" ]]; then
-    info "Creating directory: $dir"
-    mkdir -p "$dir"
-  else
-    success "Directory exists: $dir"
-  fi
-}
+# Source logging
+if [[ -f "${APP_BASE}/lib/output.sh" ]]; then
+  # shellcheck disable=SC1091
+  source "${APP_BASE}/lib/output.sh"
+else
+  echo "[ERR] Missing lib/output.sh at ${APP_BASE}/lib/output.sh" >&2
+  exit 1
+fi
 
 bootstrap_config() {
   if [[ ! -f "$CONFIG_FILE" ]]; then
@@ -55,16 +21,18 @@ bootstrap_config() {
     cat > "$CONFIG_FILE" <<'EOF'
 {
     "app": {
-        "build_home": "$BUILD_HOME",
+        "build_home": "$HOME/ptekwpdev",
         "project_base": "$HOME/projects",
+        "...": ""
     },
     "environments": {
         "project_name": "splatt",
         "project_title": "My new SPLATT site",
         "description": "Splatt Test WordPress development environment",
-        "baseDir": "/ptekwpdev/splatt",     
-        "domain": "splatt.dev",             
+        "baseDir": "/ptekwpdev/splatt",     "_comment": "relative to app::PROJECT_BASE",
+        "domain": "splatt.dev",             "_comment": "used in WP,PROXY, SSL certs, etc",
         "secrets": {
+            "project_domain": "splatt.dev",
             "sqldb_name": "splattdb",
             "sqldb_user": "splattdbu",
             "sqldb_pass": "ChangeMe1!",
@@ -77,6 +45,7 @@ bootstrap_config() {
     }
 }
 EOF
+
     success "Base config file created"
   else
     warn "Config file already exists, skipping bootstrap"
@@ -84,21 +53,16 @@ EOF
 }
 
 setup_directories() {
-  # Ensure core directories exist
   ensure_dir "$CONFIG_BASE/config"
-
-  # If config exists, read app-wide dirs
-  if [[ -f "$CONFIG_FILE" ]]; then
-    PROJECTS_BASE=$(jq -r '.app.project_base' "$CONFIG_FILE")
-
-    ensure_dir "$PROJECTS_BASE"
-  fi
+  ensure_dir "$CONFIG_BASE/secrets"
+  ensure_dir "$CONFIG_BASE/certs"
+  ensure_dir "$CONFIG_BASE/assets"
 }
 
 # === MAIN ===
-info "Initializing PtekWPDev CONFIG_BASE..."
+info "Initializing PtekWPDev workspace..."
 
 bootstrap_config
 setup_directories
 
-success "Setup complete. CONFIG_BASE ready at ${CONFIG_BASE}"
+success "Setup complete. Workspace ready at ${CONFIG_BASE}"
