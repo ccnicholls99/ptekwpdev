@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WORKSPACE="${HOME}/.ptekwpdev"
-CONFIG_FILE="${WORKSPACE}/workspaces.json"
+# Target App Configuration in user/home
+BUILD_HOME="$(dirname "$0")"
+CONFIG_BASE="${HOME}/.ptekwpdev"
+CONFIG_FILE="${CONFIG_BASE}/environments.json"
 
 # Default verbosity: normal (1)
 VERBOSE=1
@@ -34,7 +36,7 @@ done
 export VERBOSE
 
 # Source logging functions
-source "$(dirname "$0")/lib/output.sh"
+source "$BUILD_HOME/lib/output.sh"
 
 ensure_dir() {
   local dir="$1"
@@ -49,27 +51,30 @@ ensure_dir() {
 bootstrap_config() {
   if [[ ! -f "$CONFIG_FILE" ]]; then
     info "Creating base config file at $CONFIG_FILE"
+
     cat > "$CONFIG_FILE" <<'EOF'
 {
-  "app": {
-    "projects_dir": "~/projects",
-    "assets_dir": "~/.ptekwpdev/assets",
-    "certs_dir": "~/.ptekwpdev/certs",
-    "db_image": "mariadb:10.11",
-    "wp_image": "wordpress:6.7-php8.2"
-  },
-  "workspaces": {
-    "example-site": {
-      "domain": "example.dev",
-      "db_name": "example_db",
-      "db_user": "example_user",
-      "plugins": ["akismet"],
-      "theme": "twentytwentyfive",
-      "secrets": {
-        "db_pass_file": "~/.ptekwpdev/secrets/example-site.dev"
-      }
+    "app": {
+        "build_home": "$BUILD_HOME",
+        "project_base": "$HOME/projects",
+    },
+    "environments": {
+        "project_name": "splatt",
+        "project_title": "My new SPLATT site",
+        "description": "Splatt Test WordPress development environment",
+        "baseDir": "/ptekwpdev/splatt",     
+        "domain": "splatt.dev",             
+        "secrets": {
+            "sqldb_name": "splattdb",
+            "sqldb_user": "splattdbu",
+            "sqldb_pass": "ChangeMe1!",
+            "sqldb_root_pass": "ChangeMe1!",
+            "wp_admin_user": "admin",
+            "wp_admin_pass": "ChangeMe1!",
+            "wp_admin_email": "admin@splatt.dev",
+            "jwt_secret": "1234567890!@#$%^&*()"
+        }
     }
-  }
 }
 EOF
     success "Base config file created"
@@ -80,24 +85,20 @@ EOF
 
 setup_directories() {
   # Ensure core directories exist
-  ensure_dir "$WORKSPACE/configs"
-  ensure_dir "$WORKSPACE/secrets"
+  ensure_dir "$CONFIG_BASE/config"
 
   # If config exists, read app-wide dirs
   if [[ -f "$CONFIG_FILE" ]]; then
-    PROJECTS_DIR=$(jq -r '.app.projects_dir' "$CONFIG_FILE")
-    ASSETS_DIR=$(jq -r '.app.assets_dir' "$CONFIG_FILE")
-    CERTS_DIR=$(jq -r '.app.certs_dir' "$CONFIG_FILE")
+    PROJECTS_BASE=$(jq -r '.app.project_base' "$CONFIG_FILE")
 
-    ensure_dir "$ASSETS_DIR"
-    ensure_dir "$CERTS_DIR"
+    ensure_dir "$PROJECTS_BASE"
   fi
 }
 
 # === MAIN ===
-info "Initializing PtekWPDev workspace..."
+info "Initializing PtekWPDev CONFIG_BASE..."
 
 bootstrap_config
 setup_directories
 
-success "Setup complete. Workspace ready at ${WORKSPACE}"
+success "Setup complete. CONFIG_BASE ready at ${CONFIG_BASE}"

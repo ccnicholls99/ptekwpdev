@@ -1,0 +1,133 @@
+#
+# Depends on .env file
+#
+services:
+  wordpress:
+    container_name: ${PROJECT_NAME}_wp
+    build: 
+      context: .
+      dockerfile: wordpress.Dockerfile
+      tags:
+        - ptekdevwp:wordpress
+    hostname: wordpress
+    ports:
+      - ${WORDPRESS_PORT:-80}:80 # change this to expose different port
+    extra_hosts:
+      - "${PROJECT_DOMAIN}=127.0.0.1"
+    environment:
+      WORDPRESS_HOME: ${WORDPRESS_SCHEME}://${WORDPRESS_URL:-localhost}:${WORDPRESS_PORT:-80}
+      WORDPRESS_DB_HOST: sqldb              # Service defined in this Compose File
+      WORDPRESS_DB_NAME: ${SQLDB_NAME:-wordpress}
+      WORDPRESS_DB_USER: ${SQLDB_USER:-wordpress}
+      WORDPRESS_DB_PASSWORD: ${SQLDB_PASSWORD}
+      WORDPRESS_DEBUG: ${WORDPRESS_DEBUG:-0}
+      WORDPRESS_CONFIG_EXTRA: |
+        define('FS_METHOD','direct');
+        define('WP_DEBUG_LOG', ${WORDPRESS_DEBUG_LOG:-false});
+        define('WP_DISABLE_FATAL_ERROR_HANDLER', ${WORDPRESS_DISABLE_FATAL:-false});
+    volumes:
+      - ${VOL_WORDPRESS_CORE}:/var/www/html       # mounting our wordpress code
+      - ${VOL_WORDPRESS_APP:-../app}:/usr/src/ptekdevwp        # project home
+      - wpapache:/etc/apache2
+    depends_on:
+        - sqldb
+    #networks:
+    #  - frontend
+    #  - backend
+
+#>>
+# Proxy Server running on nginx as a frontend to the wordpress container
+#<< 
+  proxy:
+    image: nginx:alpine
+    container_name: ${PROJECT_NAME}_proxy
+    hostname: sxmpokerrun
+    restart: always
+    extra_hosts:
+      - "${PROJECT_DOMAIN}=127.0.0.1"
+    command: ['nginx-debug', "-g", "daemon off;"]
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./config/proxy/nginx.conf:/etc/nginx/nginx.conf
+      - ./config/proxy/certs:/etc/nginx/certs
+    depends_on:
+      - wordpress
+    #networks:
+    #  - frontend
+
+  sqldb:
+    container_name: ${PROJECT_NAME}_sqldb
+    image: ${SQLDB_IMAGE}:${SQLDB_VERSION}
+    restart: always
+    environment:
+      MYSQL_DATABASE: ${SQLDB_NAME}
+      MYSQL_USER: ${SQLDB_USER}
+      MYSQL_PASSWORD: ${SQLDB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${SQLDB_ROOT_PASSWORD}
+    #networks:
+    #  - backend
+    volumes:
+      - ${VOL_SQLDB}:/var/lib/mysql
+
+  sqladmin:
+    image: ${SQLADMIN_IMAGE}:${SQLADMIN_VERSION:-latest}
+    container_name: ${PROJECT_NAME}_sqladmin
+    depends_on: 
+      - sqldb
+    ports:
+      - ${SQLADMIN_PORT:-8080}:80
+    environment:
+      MYSQL_USER: ${SQLDB_USER:-wordpress}
+      MYSQL_PASSWORD: ${SQLDB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${SQLDB_ROOT_PASSWORD}
+      PMA_HOST: sqldb
+      #PMA_PORT: ${SQLADMIN_PORT:-8080}
+    #volumes:
+      #- config/phpadmin/config.user.inc.php:/etc/phpmyadmin/conf.user.inc.php :ro
+    #networks:
+    #  - backend
+    #  - frontend
+  wpcli:
+    container_name: ${PROJECT_NAME}_wpcli
+    #image: wordpress:cli
+    build:
+      context: ./docker/config/wpcli
+      tags:
+        - ptekdevwp:wpcli
+    command: ["tail", "-f", "/dev/null"] 
+    extra_hosts:
+      - "${PROJECT_DOMAIN}=127.0.0.1"
+    links:
+      - sqldb
+      - wordpress
+    #user: 33:33
+    environment:
+      WORDPRESS_DB_HOST: sqldb              # Service defined in this Compose File
+      WORDPRESS_DB_NAME: ${SQLDB_NAME:-wordpress}
+      WORDPRESS_DB_USER: ${SQLDB_USER:-wordpress}
+      WORDPRESS_DB_PASSWORD: ${SQLDB_PASSWORD}
+      WORDPRESS_ADMIN_USER: ${WORDPRESS_ADMIN_USER}
+      WORDPRESS_ADMIN_PASSWORD: ${WORDPRESS_ADMIN_PASSWORD}
+      WORDPRESS_ADMIN_EMAIL: ${WORDPRESS_ADMIN_EMAIL:-support@paradisiumtek.com}
+      WORDPRESS_FRONT_URL: ${WORDPRESS_SCHEME:-http}://${WORDPRESS_URL:-localhost}:${WORDPRESS_PORT:-80}
+      WORDPRESS_CONFIG_EXTRA: |
+        define('FS_METHOD','direct');
+    volumes:
+      - ${VOL_WORDPRESS_CORE}:/var/www/html
+      - ${VOL_WORDPRESS_APP:-../app}:/usr/src/ptekdevwp
+    #networks:
+    #  - frontend
+    #  - backend
+
+volumes:
+  ptekdevwp-assets:
+    external: true
+  wpapache:
+
+#networks:
+#  frontend:
+#    name: ${PROJECT_NAME}.net
+#  backend:
+#    name: ${PROJECT_NAME}.internal
