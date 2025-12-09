@@ -1,0 +1,19 @@
+#
+# We build a Resource only Volume "ptekdevwp-assets" into a dummy container
+# This volume can be used in other containers to locate local plugins themese and
+# other static assets.
+#
+services:
+  wpassets:
+    image: alpine:latest
+    container_name: wpassets
+    build:
+      context: .
+    # Keep alive for debug purpose
+    command: ["tail", "-f", "/dev/null"]
+    volumes:
+      - ptekdevwp-assets:/usr/src/ptekdevwp
+
+volumes:
+  ptekdevwp-assets:
+    name: "ptekdevwp-assets"
