@@ -29,7 +29,7 @@ RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
 #RUN getcap /usr/sbin/apache2
 
 # Extend PHP Resource limits
-COPY config/ptek-resources.ini /usr/local/etc/php/conf.d/
+COPY config/wordpress/ptek-resources.ini /usr/local/etc/php/conf.d/
 
 #COPY --from=build /etc/apache2 config/apache/wp
 
