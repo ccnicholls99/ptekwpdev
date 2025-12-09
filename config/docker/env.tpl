@@ -2,7 +2,7 @@
 # Environment Settings for ptekwpdev project %project_name%
 # --------------------------------------------------------------------
 # The project name - used as a prefix for all container & project names
-PROJECT_NAME=^PROJECT_NAME^
+PROJECT_NAME=^project_name^
 PROJECT_DOMAIN=^project_domain^
 PROJECT_TITLE="^project_title^"
 
