@@ -4,16 +4,16 @@
 # other static assets.
 #
 services:
-  wpassets:
+  ptekwpdev-assets:
     image: alpine:latest
-    container_name: wpassets
+    container_name: ptkewpdev_assets
     build:
       context: .
     # Keep alive for debug purpose
     command: ["tail", "-f", "/dev/null"]
     volumes:
-      - ptekdevwp-assets:/usr/src/ptekdevwp
+      - ptekwpdev_assets:/usr/src/ptekwpdev
 
 volumes:
-  ptekdevwp-assets:
-    name: "ptekdevwp-assets"
+  ptekwpdev_assets:
+    name: "ptekwpdev_assets"
