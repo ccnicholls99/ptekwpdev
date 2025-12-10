@@ -1,1 +1,2 @@
-Place your local theme zip files helpers
+Place your local theme zip files here...
+./themes/name/version/theme-file[.zip]

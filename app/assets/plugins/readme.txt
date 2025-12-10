@@ -1,1 +1,2 @@
-Place your local plugin zip files helpers
+Place your local plugin zip files here.
+./plugins/name/version/plugin-file.zip

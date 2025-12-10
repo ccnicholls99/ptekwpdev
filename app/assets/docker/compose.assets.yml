@@ -6,7 +6,7 @@
 services:
   ptekwpdev-assets:
     image: alpine:latest
-    container_name: ptkewpdev_assets
+    container_name: ptekwpdev_assets
     build:
       context: .
     # Keep alive for debug purpose
