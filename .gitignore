@@ -10,3 +10,5 @@ app/assets/static/*.zip
 app/assets/plugins/*/*.zip
 app/assets/themes/*/*.zip
 app/assets/static/*/*.zip
+
+logs/*

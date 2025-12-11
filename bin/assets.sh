@@ -88,28 +88,30 @@ down_assets() {
 }
 
 copy_asset() {
-  [[ -n "$ASSET_TYPE" ]] || { echo "Missing --type"; usage; }
-  [[ -n "$ASSET_NAME" ]] || { echo "Missing --name"; usage; }
+  TYPE="$ASSET_TYPE"
+  NAME="$ASSET_NAME"
+  VERSION="$ASSET_VERSION"
+  SRC="$ASSET_SRC"
 
-  if [[ -z "$ASSET_SRC" ]]; then
-    ASSET_SRC="${ASSETS_REPO}/${ASSET_TYPE}s/${ASSET_NAME}"
-  fi
+  # Map singular type to provisioned plural folder
+  case "$TYPE" in
+    plugin)   TYPE_DIR="plugins" ;;
+    theme)    TYPE_DIR="themes" ;;
+    static)   TYPE_DIR="static" ;;
+    *)        TYPE_DIR="$TYPE" ;;
+  esac
 
-  [[ -e "$ASSET_SRC" ]] || { warn "Source not found: $ASSET_SRC"; exit 1; }
+  DEST_DIR="/usr/src/ptekwpdev/assets/${TYPE_DIR}/${NAME}/${VERSION}"
 
-  DEST="/usr/src/ptekwpdev/assets/${ASSET_TYPE}s/${ASSET_NAME}"
-  if [[ -n "$ASSET_VERSION" && "$ASSET_VERSION" != "none" ]]; then
-    DEST="${DEST}/${ASSET_VERSION}"
-  fi
+  echo "Copying $TYPE asset $NAME v$VERSION from $SRC → $CONTAINER_NAME:$DEST_DIR"
 
-  ensure_dir "$DEST"
-  log_copy "$ASSET_SRC" "$DEST"
+  TMP_FILE="/tmp/${NAME}-${VERSION}.zip"
+  docker cp "$SRC" "$CONTAINER_NAME:$TMP_FILE"
+  docker exec "$CONTAINER_NAME" sh -c "mkdir -p $DEST_DIR && mv $TMP_FILE $DEST_DIR/"
 
-  echo "Copying $ASSET_TYPE [$ASSET_NAME] (version: ${ASSET_VERSION:-latest}) from $ASSET_SRC → $CONTAINER_NAME:$DEST"
-  docker cp "$ASSET_SRC" "$CONTAINER_NAME:$DEST"
-  success "✅ Installed $ASSET_TYPE [$ASSET_NAME] (version: ${ASSET_VERSION:-latest}) into assets container"
+  log_copy "$SRC" "$DEST_DIR"
+  success "✅ Copied $TYPE asset $NAME v$VERSION into container"
 }
-
 # --- Parse arguments ---
 while [[ $# -gt 0 ]]; do
   case "$1" in
