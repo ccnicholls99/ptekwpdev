@@ -57,3 +57,16 @@ backup_config() {
     echo "[WARN] Config file $config_file not found, skipping backup"
   fi
 }
+
+# Log a copy operation for auditability
+log_copy() {
+  local src="$1"
+  local dest="$2"
+  local ts
+  ts="$(date '+%Y-%m-%d %H:%M:%S')"
+
+  # Ensure audit log directory exists
+  mkdir -p "${APP_BASE}/logs"
+
+  echo "[$ts] COPY: $src → $dest" >> "${APP_BASE}/logs/assets.log"
+}

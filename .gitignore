@@ -1,2 +1,12 @@
 doc/cp_*
 */**/.env
+
+# Ignore asset archives
+app/assets/plugins/*.zip
+app/assets/themes/*.zip
+app/assets/static/*.zip
+
+# Optionally ignore any nested versioned zips
+app/assets/plugins/*/*.zip
+app/assets/themes/*/*.zip
+app/assets/static/*/*.zip
