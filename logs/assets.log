@@ -1,2 +1,6 @@
 [2025-12-11 08:01:44] COPY: /home/ccnicholls/projects/ptekwpdev/app/assets/plugins → /usr/src/ptekwpdev/plugins
 [2025-12-11 08:01:45] COPY: /home/ccnicholls/projects/ptekwpdev/app/assets/themes → /usr/src/ptekwpdev/themes
+[2025-12-11 09:00:43] COPY: /home/ccnicholls/projects/ptekwpdev/app/assets/plugins → /usr/src/ptekwpdev/assets/plugins
+[2025-12-11 09:00:43] COPY: /home/ccnicholls/projects/ptekwpdev/app/assets/themes → /usr/src/ptekwpdev/assets/themes
+[2025-12-11 09:02:01] COPY: /home/ccnicholls/projects/ptekwpdev/app/assets/plugins → /usr/src/ptekwpdev/assets/plugins
+[2025-12-11 09:02:01] COPY: /home/ccnicholls/projects/ptekwpdev/app/assets/themes → /usr/src/ptekwpdev/assets/themes

@@ -35,12 +35,15 @@ build_assets() {
   echo "Building assets container from $ASSETS_DOCKER"
   docker compose -f "${ASSETS_DOCKER}/compose.assets.yml" build ptekwpdev-assets
 
+  echo "Starting container so assets can be copied"
+  docker compose -f "${ASSETS_DOCKER}/compose.assets.yml" up -d ptekwpdev-assets
+
   echo "Copying existing assets from $APP_BASE/app/assets → $CONTAINER_NAME:/usr/src/ptekwpdev/assets"
   COPIED_ASSETS=()
 
   for type in plugins themes static; do
     SRC_DIR="${APP_BASE}/app/assets/${type}"
-    DEST_DIR="/usr/src/ptekwpdev/${type}"
+    DEST_DIR="/usr/src/ptekwpdev/assets/${type}"
 
     if [[ -d "$SRC_DIR" ]]; then
       TMP_DIR="/tmp/assets-${type}"
@@ -49,7 +52,7 @@ build_assets() {
 
       log_copy "$SRC_DIR" "$DEST_DIR"
       COPIED_ASSETS+=("$type: $(ls -1 "$SRC_DIR" | xargs)")
-      success "✅ Copied existing $type assets into container volume"
+      success "✅ Copied $type assets into container"
     else
       warn "No $type assets found in $SRC_DIR"
     fi
@@ -66,9 +69,16 @@ build_assets() {
   fi
 }
 
+
 up_assets() {
-  echo "Starting assets container"
-  docker compose -f "${ASSETS_DOCKER}/compose.assets.yml" up -d ptekwpdev-assets
+  # Check if container is already running
+  if docker ps --filter "name=$CONTAINER_NAME" --filter "status=running" | grep -q "$CONTAINER_NAME"; then
+    success "✅ Assets container '$CONTAINER_NAME' is already running"
+  else
+    echo "Starting assets container"
+    docker compose -f "${ASSETS_DOCKER}/compose.assets.yml" up -d ptekwpdev-assets
+    success "✅ Assets container started"
+  fi
 }
 
 down_assets() {

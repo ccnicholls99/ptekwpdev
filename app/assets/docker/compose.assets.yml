@@ -1,19 +1,14 @@
-#
-# We build a Resource only Volume "ptekdevwp-assets" into a dummy container
-# This volume can be used in other containers to locate local plugins themese and
-# other static assets.
-#
 services:
   ptekwpdev-assets:
-    image: alpine:latest
     container_name: ptekwpdev_assets
     build:
       context: .
-    # Keep alive for debug purpose
-    command: ["tail", "-f", "/dev/null"]
+      dockerfile: Dockerfile
+    command: tail -f /dev/null   # 👈 keeps the container running
     volumes:
-      - ptekwpdev_assets:/usr/src/ptekwpdev
+      - ptekwpdev_assets_volume:/usr/src/ptekwpdev/assets   # 👈 named volume
+    restart: unless-stopped
 
 volumes:
-  ptekwpdev_assets:
-    name: "ptekwpdev_assets"
+  ptekwpdev_assets_volume:   # 👈 declare the volume
+    name: ptekwpdev_assets_volume
