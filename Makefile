@@ -13,10 +13,22 @@ certs:
 	@echo "Generating dev SSL certificates for project: $(PROJECT_NAME)"
 	@bin/generate_certs.sh --project $(PROJECT)
 
-# Combined setup: provision + certs
+# Build Docker environment
+build:
+	@echo "Building Docker environment for project: $(PROJECT_NAME)"
+	@bin/build.sh --project $(PROJECT)
+
+# Run WordPress auto-install inside container
+autoinstall:
+	@echo "Running WordPress auto-install for project: $(PROJECT_NAME)"
+	@bin/autoinstall.sh --project $(PROJECT)
+
+# Combined setup: provision + certs + build + autoinstall
 setup:
 	@$(MAKE) provision PROJECT=$(PROJECT)
 	@$(MAKE) certs PROJECT=$(PROJECT)
+	@$(MAKE) build PROJECT=$(PROJECT)
+	@$(MAKE) autoinstall PROJECT=$(PROJECT)
 
 # Clean: remove generated project folder (uses project_name, not key)
 clean:
