@@ -25,6 +25,7 @@ Before using PtekWPDev, ensure you have:
 - **Bash** ≥ 5.x
 - **OpenSSL** (for SSL certificate generation)
 - Git (to clone and manage repositories)
+- Visual Studio Code
 
 ---
 
@@ -33,20 +34,36 @@ Before using PtekWPDev, ensure you have:
 - **Repository root:** `$HOME/projects/ptekwpdev`  
   Contains app source, scripts, and templates. Managed via Git.
 
-- **User config:** `$HOME/.ptekwpdev`  
+- **App config:** `$HOME/.ptekwpdev`  
   Stores environment templates, SSL certs, and shared assets. Not committed to Git.
 
 ```
 ptekwpdev/
+├── app/                # Executables (setup, provision, teardown, edit)
+  └── logs/             # Setup logs
+  └── assets/           # Local plugins, themes, and static assets deployed to Assets Container, available to all projects
+    └── plugins/        # Static plugin archives - unversioned plugins go here. Versioned plugins at ./name/version/my-plugin.1.1.2.zip.
+    └── themes/         # Static theme archives - versioned by ./name/version/my-theme.1.0.2.zip
+    └── static/         # Other Static assets (templates, ini, cfg, images, css, etc)
+    └── docker/         # Docker Context for container management
 ├── bin/                # Executables (setup, provision, teardown, edit)
-├── templates/          # Dockerfiles, docker-compose.yml, env templates
+├── config/             # Deployment templates
+  └── docker/           # App Docker Context
+  └── wordpress/        # Wordpress config, extra php.ini, etc
+  └── sqldb/            # Wordpress SQL DB 
 ├── lib/                # Shared Bash functions (logging, error handling, envsubst)
 └── docs/               # Usage guides
 
 ~/.ptekwpdev/
-├── env-templates/      # Base .env files
+├── environments.json   # App config and deployment projects
 ├── docker-templates/   # Compose + Dockerfile templates
 ├── certs/              # SSL certs per environment
+└── assets/             # Shared plugins/themes
+
+$PROJECT_BASE/          # Deployed Environment/Project
+├── app                 # log files and other app-generated assets
+├── docker              # Docker context
+├── config/             # Config and templates for various containerized apps
 └── assets/             # Shared plugins/themes
 ```
 
