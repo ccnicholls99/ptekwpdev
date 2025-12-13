@@ -3,15 +3,14 @@ set -euo pipefail
 
 # Resolve APP_BASE relative to script location
 APP_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CONFIG_BASE="${HOME}/.ptekwpdev"
-CONFIG_FILE="${CONFIG_BASE}/environments.json"
 
+# Load helpers first (so warn/success/error are available)
 source "${APP_BASE}/lib/output.sh"
 source "${APP_BASE}/lib/helpers.sh"
 
 ASSETS_DOCKER="${APP_BASE}/app/assets/docker"
 ASSETS_REPO="${APP_BASE}/assets"
-CONTAINER_NAME="ptekwpdev_assets"
+CONTAINER_NAME="ptekwpdev-assets"
 
 ACTION=""
 ASSET_TYPE=""
@@ -25,9 +24,16 @@ usage() {
   printf "\t-t, --type [ plugin | theme | static ]\n"
   printf "\t-n, --name <asset>\n"
   printf "\t-v, --version <v> (default: none)\n"
-  printf "\t-s, --src <path> (default: \$ASSETS_REPO/<type>s/<name>)\n\n"
+  printf "\t-s, --src <path> (default: \$ASSETS_REPO/<type>s/<name>/<name>.zip)\n\n"
   exit 1
 }
+
+# Logging setup (after helpers so we can call warn)
+LOG_DIR="$APP_BASE/app/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/assets.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+warn "Starting assets script at $(date)"
 
 # --- Functions for each action ---
 
@@ -69,7 +75,6 @@ build_assets() {
   fi
 }
 
-
 up_assets() {
   # Check if container is already running
   if docker ps --filter "name=$CONTAINER_NAME" --filter "status=running" | grep -q "$CONTAINER_NAME"; then
@@ -103,6 +108,15 @@ copy_asset() {
 
   DEST_DIR="/usr/src/ptekwpdev/assets/${TYPE_DIR}/${NAME}/${VERSION}"
 
+  # Default SRC if not provided and validate
+  if [[ -z "$SRC" ]]; then
+    SRC="${ASSETS_REPO}/${TYPE_DIR}/${NAME}/${NAME}.zip"
+  fi
+  if [[ ! -f "$SRC" ]]; then
+    error "Source asset not found: $SRC"
+    exit 1
+  fi
+
   echo "Copying $TYPE asset $NAME v$VERSION from $SRC → $CONTAINER_NAME:$DEST_DIR"
 
   TMP_FILE="/tmp/${NAME}-${VERSION}.zip"
@@ -112,6 +126,7 @@ copy_asset() {
   log_copy "$SRC" "$DEST_DIR"
   success "✅ Copied $TYPE asset $NAME v$VERSION into container"
 }
+
 # --- Parse arguments ---
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -122,14 +137,14 @@ while [[ $# -gt 0 ]]; do
     -s|--src)      ASSET_SRC="$2"; shift 2 ;;
     -h|--help)     usage ;;
     *) echo "Unknown option: $1"; usage ;;
-  esac
+  end
 done
 
 # --- Dispatcher ---
 case "$ACTION" in
-  build) build_assets ;;
-  up)    up_assets ;;
-  down)  down_assets ;;
+  build)      build_assets ;;
+  up)         up_assets ;;
+  down)       down_assets ;;
   copy-asset) copy_asset ;;
-  *) usage ;;
-esac  
+  *)          usage ;;
+esac

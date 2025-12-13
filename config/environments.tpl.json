@@ -8,7 +8,7 @@
       "project_name": "ptekdemo",                
       "project_title": "My new demo site",
       "description": "Demo Test WordPress development environment",
-      "baseDir": "/ptekwpdev/ptekdemo",
+      "base_dir": "/ptekdemo",
       "domain": "ptekdemo.dev",
       "secrets": {
         "sqldb_name": "ptekdemodb",

@@ -1,6 +1,11 @@
-PROJECT ?= default
+# Require PROJECT to be set for project-bound targets
+ifndef PROJECT
+$(error PROJECT is required. Usage: make <target> PROJECT=<name>)
+endif
+
 CONFIG_FILE := $(HOME)/.ptekwpdev/environments.json
-PROJECT_BASE := $(shell jq -r '.app.project_base' $(CONFIG_FILE) | sed 's|\$$HOME|$(HOME)|')
+APP_PROJECT_BASE := $(shell jq -r '.app.project_base' $(CONFIG_FILE) | sed 's|\$$HOME|$(HOME)|')
+PROJECT_BASE := $(shell jq -r ".environments[\"$(PROJECT)\"].base_dir" $(CONFIG_FILE) | sed 's|^/||')
 PROJECT_NAME := $(shell jq -r ".environments[\"$(PROJECT)\"].project_name" $(CONFIG_FILE))
 
 # Provision project scaffold
@@ -30,11 +35,19 @@ setup:
 	@$(MAKE) build PROJECT=$(PROJECT)
 	@$(MAKE) autoinstall PROJECT=$(PROJECT)
 
-# Clean: remove generated project folder (uses project_name, not key)
+# Clean: remove generated project folder (resolved relative to app.project_base)
 clean:
 	@echo "Cleaning project: $(PROJECT_NAME)"
-	@rm -rf $(PROJECT_BASE)/$(PROJECT_NAME)
-	@echo "Removed $(PROJECT_BASE)/$(PROJECT_NAME)"
+	@rm -rf $(APP_PROJECT_BASE)/$(PROJECT_BASE)
+	@echo "Removed $(APP_PROJECT_BASE)/$(PROJECT_BASE)"
+
+# Assets: repo-neutral asset pipeline
+# Example usage:
+#   make assets ACTION=build
+#   make assets ACTION=copy-asset TYPE=plugin NAME=myplugin VERSION=1.0 SRC=path/to.zip
+assets:
+	@echo "Running assets pipeline (ACTION=$(ACTION))"
+	@bin/assets.sh --action $(ACTION) --type $(TYPE) --name $(NAME) --version $(VERSION) --src $(SRC)
 
 # Allow shorthand: "make demo" → runs setup for project=demo
 %:

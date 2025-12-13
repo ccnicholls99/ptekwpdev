@@ -1,136 +1,132 @@
 #!/usr/bin/env bash
+#
+# Provision script for WordPress dev environments (ptekwpdev)
+# - Centralized project lookup in ~/.ptekwpdev/environments.json
+# - Creates scaffold under PROJECT_BASE (app, bin, docker, src)
+# - Shared output functions sourced from APP_BASE/lib/output.sh
+#
+
 set -euo pipefail
 
+# -------------------------------
+# Path resolution
+# -------------------------------
 APP_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CONFIG_BASE="${HOME}/.ptekwpdev"
-CONFIG_FILE="${CONFIG_BASE}/environments.json"
 
-source "${APP_BASE}/lib/output.sh"
-source "${APP_BASE}/lib/helpers.sh"
+# -------------------------------
+# Defaults
+# -------------------------------
+PROJECT=""
+CONFIG_BASE="$HOME/.ptekwpdev"
+PROJECT_CONF="environments.json"
 
-PROJECT_KEY=""
+# -------------------------------
+# Load helpers
+# -------------------------------
+if [[ -f "$APP_BASE/lib/output.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "$APP_BASE/lib/output.sh"
+else
+    echo "Missing output.sh at $APP_BASE/lib/" >&2
+    exit 1
+fi
 
+# -------------------------------
+# Usage
+# -------------------------------
 usage() {
-  echo "Usage: $0 --project <key>"
-  exit 1
+    echo "Usage: $(basename "$0") --project NAME"
+    echo
+    echo "Options:"
+    echo "  -p, --project NAME        REQUIRED project key"
+    echo "  -h, --help                Show this help message"
+    echo
+    echo "Example:"
+    echo "  $(basename "$0") --project demo"
 }
 
-# Parse args
+# -------------------------------
+# Option parsing
+# -------------------------------
 while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --project) PROJECT_KEY="$2"; shift 2 ;;
-    -h|--help) usage ;;
-    *) error "Unknown option: $1"; usage ;;
-  esac
+    case "$1" in
+        -p|--project) PROJECT="$2"; shift 2 ;;
+        -h|--help) usage; exit 0 ;;
+        *) error "Unknown option: $1"; usage; exit 1 ;;
+    esac
 done
 
-[[ -n "$PROJECT_KEY" ]] || { error "Missing --project"; usage; }
-[[ -f "$CONFIG_FILE" ]] || { error "Missing config file: $CONFIG_FILE"; exit 1; }
-
-PROJECT_NAME=$(jq -r ".environments[\"$PROJECT_KEY\"].project_name" "$CONFIG_FILE")
-PROJECT_TITLE=$(jq -r ".environments[\"$PROJECT_KEY\"].project_title" "$CONFIG_FILE")
-PROJECT_DESC=$(jq -r ".environments[\"$PROJECT_KEY\"].description" "$CONFIG_FILE")
-PROJECT_DOMAIN=$(jq -r ".environments[\"$PROJECT_KEY\"].domain" "$CONFIG_FILE")
-
-PROJECT_BASE=$(jq -r '.app.project_base' "$CONFIG_FILE")
-PROJECT_BASE="${PROJECT_BASE/\$HOME/$HOME}"
-
-TARGET_ROOT="${PROJECT_BASE}/${PROJECT_NAME}"
-CONFIG_DEST="${TARGET_ROOT}/config"
-DOCKER_DEST="${TARGET_ROOT}/docker"
-
-info "Provisioning project [$PROJECT_KEY] → name: $PROJECT_NAME"
-info "Title: $PROJECT_TITLE"
-info "Description: $PROJECT_DESC"
-info "Domain: $PROJECT_DOMAIN"
-info "Target root: $TARGET_ROOT"
-
-# Build token map (lowercase keys)
-declare -A TOKENS
-build_token_map() {
-  while IFS='=' read -r k v; do
-    [[ -n "$k" ]] && TOKENS["${k,,}"]="$v"
-  done < <(jq -r ".environments[\"$PROJECT_KEY\"].secrets | to_entries | .[] | \"\(.key)=\(.value)\"" "$CONFIG_FILE")
-
-  TOKENS["project_name"]="$PROJECT_NAME"
-  TOKENS["project_title"]="$PROJECT_TITLE"
-  TOKENS["project_desc"]="$PROJECT_DESC"
-  TOKENS["project_domain"]="$PROJECT_DOMAIN"
-}
-
-generate_env_file_from_caret_tokens() {
-  local tpl="$1"
-  local dest="$2"
-
-  [[ -f "$tpl" ]] || { error "env.tpl not found at $tpl"; return 1; }
-
-  local content
-  content="$(<"$tpl")"
-
-  for key in "${!TOKENS[@]}"; do
-    local val="${TOKENS[$key]}"
-    content="${content//^$key^/$val}"
-  done
-
-  mapfile -t unresolved < <(grep -oE '\^[A-Za-z0-9_]+\^' <<< "$content" | sort -u || true)
-
-  printf "%s\n" "$content" > "$dest"
-  success ".env generated at ${dest}"
-
-  if [[ ${#unresolved[@]} -gt 0 ]]; then
-    warn "Unresolved tokens in ${dest}: ${unresolved[*]}"
-    warn "Source env template: ${tpl}"
-  fi
-}
-
-# Ensure dirs
-ensure_dir "$TARGET_ROOT"
-ensure_dir "$CONFIG_DEST"
-ensure_dir "$DOCKER_DEST"
-
-# Copy service configs
-for service in wordpress sqldb sqladmin proxy wpcli; do
-  ensure_dir "$CONFIG_DEST/$service"
-  cp -r "${APP_BASE}/config/${service}/"* "$CONFIG_DEST/$service/" 2>/dev/null || true
-done
-
-# Copy docker templates (except env.tpl)
-DOCKER_SRC="${APP_BASE}/config/docker"
-DOCKER_FILES=( "wordpress.Dockerfile" "compose.build.yml" ".dockerignore" )
-
-for f in "${DOCKER_FILES[@]}"; do
-  src="${DOCKER_SRC}/$f"
-  dest="${DOCKER_DEST}/$f"
-  if [[ -f "$src" ]]; then
-    cp "$src" "$dest"
-    success "Copied $f → $DOCKER_DEST"
-  else
-    warn "Missing docker template: $f (looked in $DOCKER_SRC)"
-  fi
-done
-
-# Generate .env from env.tpl
-ENV_TPL="${DOCKER_SRC}/env.tpl"
-ENV_DEST="${DOCKER_DEST}/.env"
-build_token_map
-if [[ -f "$ENV_TPL" ]]; then
-  generate_env_file_from_caret_tokens "$ENV_TPL" "$ENV_DEST"
-else
-  warn "env.tpl not found in $DOCKER_SRC"
+# -------------------------------
+# Require project
+# -------------------------------
+if [[ -z "$PROJECT" ]]; then
+    echo "Error: --project is required."
+    usage
+    exit 1
 fi
 
-# Copy ptek-resources.ini into docker/config/wordpress
-DOCKER_CONFIG_WORDPRESS="${DOCKER_DEST}/config/wordpress"
-ensure_dir "$DOCKER_CONFIG_WORDPRESS"
+# -------------------------------
+# Project resolution
+# -------------------------------
+PROJECTS_FILE="$CONFIG_BASE/$PROJECT_CONF"
 
-RESOURCES_SRC="${APP_BASE}/config/wordpress/ptek-resources.ini"
-RESOURCES_DEST="${DOCKER_CONFIG_WORDPRESS}/ptek-resources.ini"
-
-if [[ -f "$RESOURCES_SRC" ]]; then
-  cp "$RESOURCES_SRC" "$RESOURCES_DEST"
-  success "Copied ptek-resources.ini → ${RESOURCES_DEST}"
-else
-  warn "Missing ptek-resources.ini in ${APP_BASE}/config/wordpress"
+if [[ ! -f "$PROJECTS_FILE" ]]; then
+    error "No project config found at $PROJECTS_FILE"
+    exit 1
 fi
 
-success "Provisioning complete for project [$PROJECT_KEY] → name: $PROJECT_NAME"
+APP_PROJECT_BASE=$(jq -r '.app.project_base' "$PROJECTS_FILE" | sed "s|\$HOME|$HOME|")
+PROJECT_CONFIG=$(jq -r --arg pr "$PROJECT" '.environments[$pr]' "$PROJECTS_FILE")
+
+HOST_DOMAIN=$(echo "$PROJECT_CONFIG" | jq -r '.domain // empty')
+BASE_DIR_REL=$(echo "$PROJECT_CONFIG" | jq -r '.base_dir // empty' | sed 's|^/||')
+
+PROJECT_BASE="$APP_PROJECT_BASE/$BASE_DIR_REL"
+
+# After PROJECT_BASE is resolved
+# Normalize logging output to project log file
+LOG_DIR="$PROJECT_BASE/app/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/provision.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+warn "Starting build for $PROJECT at $(date)"
+
+if [[ -z "$PROJECT_BASE" || -z "$HOST_DOMAIN" ]]; then
+    error "Project '$PROJECT' missing base_dir or domain in $PROJECTS_FILE"
+    exit 1
+fi
+
+warn "Provisioning project scaffold at $PROJECT_BASE"
+
+# -------------------------------
+# Scaffold directories
+# -------------------------------
+mkdir -p "$PROJECT_BASE"
+
+for dir in app bin docker src; do
+    mkdir -p "$PROJECT_BASE/$dir"
+done
+
+# Scaffold app/config structure
+mkdir -p "$PROJECT_BASE/app/config/docker"
+mkdir -p "$PROJECT_BASE/app/config/nginx"
+
+# -------------------------------
+# Initial files
+# -------------------------------
+ENV_FILE="$PROJECT_BASE/.env"
+if [[ ! -f "$ENV_FILE" ]]; then
+    cat > "$ENV_FILE" <<EOF
+WORDPRESS_DOMAIN=$HOST_DOMAIN
+WORDPRESS_PROJECT_TITLE=$PROJECT
+WORDPRESS_ADMIN_USER=admin
+WORDPRESS_ADMIN_PASS=admin
+WORDPRESS_ADMIN_EMAIL=admin@$HOST_DOMAIN
+EOF
+    success "Created .env file at $ENV_FILE"
+else
+    warn ".env file already exists at $ENV_FILE"
+fi
+
+success "Provisioning completed for $PROJECT ($HOST_DOMAIN)"
