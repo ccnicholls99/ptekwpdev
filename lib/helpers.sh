@@ -70,3 +70,69 @@ log_copy() {
 
   echo "[$ts] COPY: $src → $dest" >> "${APP_BASE}/logs/assets.log"
 }
+
+# === New: WHAT-IF (dry run) support ===
+
+# Global flag (default: false)
+WHAT_IF=false
+
+# Parse what-if option from args
+# Usage: if parse_what_if "$1"; then shift; fi
+parse_what_if() {
+  case "$1" in
+    -w|--what-if)
+      WHAT_IF=true
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# Run or preview an action
+# Usage: run_or_preview "Description" command args...
+run_or_preview() {
+  local description="$1"
+  shift
+  if [[ "$WHAT_IF" == true ]]; then
+    echo "[WHAT-IF] Would: $description"
+  else
+    "$@"
+  fi
+}
+
+require_container_up() {
+  local container="$1"
+  local retries="${2:-10}"
+  local delay="${3:-1}"
+
+  local attempt=1
+  while (( attempt <= retries )); do
+    if docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null | grep -q true; then
+      if docker exec "$container" true >/dev/null 2>&1; then
+        return 0
+      fi
+    fi
+    echo "[INFO] Waiting for container '$container' to be up... (attempt $attempt/$retries)"
+    sleep "$delay"
+    (( attempt++ ))
+  done
+
+  echo "[ERR] Container '$container' is not running or reachable after $retries attempts."
+  exit 1
+}
+
+# === Resolve container name for a service ===
+resolve_container_name() {
+  local compose_file="$1"
+  local service="$2"
+
+  local id
+  id="$(docker compose -f "$compose_file" ps -q "$service" || true)"
+  if [[ -z "$id" ]]; then
+    echo ""
+    return 1
+  fi
+  docker inspect --format '{{.Name}}' "$id" | sed 's/^\///'
+}
