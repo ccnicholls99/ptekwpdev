@@ -56,11 +56,11 @@ build_assets() {
     SRC_DIR="${APP_BASE}/app/assets/${type}"
     DEST_DIR="/usr/src/ptekwpdev/assets/${type}"
 
-    if [[ -d "$SRC_DIR" ]]; then
-      TMP_DIR="/tmp/assets-${type}"
-      run_or_preview "Copy $type assets from $SRC_DIR → $DEST_DIR" \
-        bash -c "docker cp \"$SRC_DIR\" \"$CONTAINER_NAME:$TMP_DIR\" && \
-                 docker exec \"$CONTAINER_NAME\" sh -c \"mkdir -p $DEST_DIR && cp -r $TMP_DIR/* $DEST_DIR/ && rm -rf $TMP_DIR\""
+if [[ -d "$SRC_DIR" ]]; then
+  TMP_DIR="/tmp/assets-${type}"
+  run_or_preview "Copy $type assets from $SRC_DIR → $DEST_DIR" \
+    bash -c "docker cp \"$SRC_DIR/.\" \"$CONTAINER_NAME:$TMP_DIR\" && \
+             docker exec \"$CONTAINER_NAME\" sh -c \"mkdir -p $DEST_DIR && cp -r $TMP_DIR/* $DEST_DIR/ && rm -rf $TMP_DIR\""
 
       log_copy "$SRC_DIR" "$DEST_DIR"
       COPIED_ASSETS+=("$type: $(ls -1 "$SRC_DIR" | xargs)")
@@ -105,8 +105,12 @@ copy_asset() {
   VERSION="$ASSET_VERSION"
   SRC="$ASSET_SRC"
 
-  if [ -z "${SRC:-}" ]; then
-    echo "Error: --src option is required: path/to/assets/asset-file[.ext]"
+  if [ -z "$TYPE" ]; then
+    error "Missing required --type option (-t). Must be one of: plugin, theme, static."
+    exit 1
+  fi
+  if [ -z "$NAME" ] || [ -z "$SRC" ]; then
+    error "Missing required --name (-n) or --src (-s)."
     exit 1
   fi
 
@@ -116,15 +120,15 @@ copy_asset() {
   }
   require_container_up "$CONTAINER_NAME" 15 2
 
-  case "$TYPE" in
-    plugin)   TYPE_DIR="plugins" ;;
-    theme)    TYPE_DIR="themes" ;;
-    static)   TYPE_DIR="static" ;;
-    *)        TYPE_DIR="$TYPE" ;;
+case "$TYPE" in
+    plugin) TYPE_DIR="plugins" ;;
+    theme)  TYPE_DIR="themes" ;;
+    static) TYPE_DIR="static" ;;
+    *)      error "Invalid type: $TYPE. Must be plugin, theme, or static."; exit 1 ;;
   esac
 
   DEST_DIR="/usr/src/ptekwpdev/assets/${TYPE_DIR}/${NAME}/${VERSION}"
-
+  
   if [[ ! -f "$SRC" ]]; then
     error "Source asset not found: $SRC"
     exit 1
