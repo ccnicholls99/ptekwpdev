@@ -7,19 +7,19 @@ PROJECT_DOMAIN=^project_domain^
 PROJECT_TITLE="^project_title^"
 
 # SQL Database values
-SQLDB_IMAGE=mariadb
-SQLDB_VERSION=10.5
+SQLDB_IMAGE=^sqldb_image^
+SQLDB_VERSION=^sqldb_version^
 SQLDB_NAME=^sqldb_name^
 SQLDB_USER=^sqldb_user^
 SQLDB_PASSWORD=^sqldb_pass^
 SQLDB_ROOT_PASSWORD=^sqldb_root_pass^
 
 # SQL Admin
-SQLADMIN_IMAGE=phpmyadmin
-SQLADMIN_PORT=5211
+SQLADMIN_IMAGE=^sqladmin_image^
+SQLADMIN_PORT=^sqladmin_port^
 
 # Wordpress values
-WORDPRESS_IMAGE=php8.1
+WORDPRESS_IMAGE=^wordpress_image^
 WORDPRESS_ADMIN_USER=^wp_admin_user^
 WORDPRESS_ADMIN_EMAIL=^wp_admin_email^
 WORDPRESS_ADMIN_PASSWORD=^wp_admin_pass^
@@ -27,8 +27,8 @@ WORDPRESS_DEBUG=0
 WORDPRESS_DEBUG_LOG=false
 WORDPRESS_DISABLE_FATAL=true
 WORDPRESS_SCHEME=http
-WORDPRESS_PORT=5210
-WORDPRESS_HOST=wordpress
+WORDPRESS_PORT=^wordpress_port^
+WORDPRESS_HOST=^wordpress_host^
 
 # Assorted Volumes
 VOL_WORDPRESS_CORE=../wordpress

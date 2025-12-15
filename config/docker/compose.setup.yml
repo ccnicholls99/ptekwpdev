@@ -1,0 +1,44 @@
+#version: "3.9"
+
+services:
+  wpcli:
+    container_name: ptekwpdev_wpcli
+    build:
+      context: .
+      dockerfile: Dockerfile.wpcli
+    volumes:
+      - ptekwpdev_assets_volume:/usr/src/ptekwpdev/assets
+    networks:
+      - appnet
+    restart: unless-stopped
+
+  sqldb:
+    image: mysql:8.0
+    container_name: ptekwpdev_db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - ptekwpdev_db_volume:/var/lib/mysql
+    networks:
+      - appnet
+    ports:
+      - "${SQLDB_PORT}:3306"
+    restart: unless-stopped
+
+  sqladmin:
+    image: adminer
+    container_name: ptekwpdev_admin
+    ports:
+      - "${SQLADMIN_PORT}:8080"
+    networks:
+      - appnet
+    restart: unless-stopped
+
+volumes:
+  ptekwpdev_assets_volume:
+  ptekwpdev_db_volume:
+
+networks:
+  appnet:
+    name: ${NETWORK_NAME}
+    external: false

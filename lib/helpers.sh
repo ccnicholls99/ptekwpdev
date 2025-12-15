@@ -48,7 +48,7 @@ backup_config() {
   backup_dir="$(dirname "$config_file")"
   local timestamp
   timestamp="$(date +%Y%m%d_%H%M%S)"
-  local backup_file="${backup_dir}/$(basename "$config_file").bak_${timestamp}"
+  local backup_file="${backup_dir}/$(basename "$config_file").${timestamp}.bak"
 
   if [[ -f "$config_file" ]]; then
     cp "$config_file" "$backup_file"
