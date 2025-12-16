@@ -29,7 +29,7 @@ source "${APP_BASE}/lib/helpers.sh"
 
 
 # Redirect stdout and stderr to log file (and console)
-exec > >(tee -a "$LOGFILE") 2>&1
+#exec > >(tee -a "$LOGFILE") 2>&1
 
 # Ensure Docker is available
 docker_check
