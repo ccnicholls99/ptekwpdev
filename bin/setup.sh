@@ -9,34 +9,32 @@ DOCKER_CONTEXT="${CONFIG_BASE}/docker"
 
 # Must run from APP_BASE
 if [[ "$PWD" != "$APP_BASE" ]]; then
-  echo "[ERR] Must run from APP_BASE: $APP_BASE"
-  echo "      Current directory: $PWD"
+  error "[ERR] Must run from APP_BASE: $APP_BASE"
+  info "      Current directory: $PWD"
   exit 1
 fi
 
 mkdir -p "${CONFIG_BASE}"
 
+
 # Source helpers
-source "${APP_BASE}/lib/output.sh"
-source "${APP_BASE}/lib/helpers.sh"
-
-# Resolve APP_BASE from environments.json
-#APP_BASE=$(jq -r '.app.build_home' "$CONFIG_FILE" | sed "s|\$HOME|$HOME|")
-
 # Ensure app-wide logs directory exists
 LOG_DIR="$APP_BASE/app/logs"
-ensure_dir "$LOG_DIR"
+mkdir -p "${LOG_DIR}"
+LOGFILE="$LOG_DIR/setup.log"
+export LOGFILE
+. "$APP_BASE/lib/output.sh"
 
-# Setup log file (app-wide)
-LOG_FILE="$LOG_DIR/setup.log"
+source "${APP_BASE}/lib/helpers.sh"
+
 
 # Redirect stdout and stderr to log file (and console)
-exec > >(tee -a "$LOG_FILE") 2>&1
+exec > >(tee -a "$LOGFILE") 2>&1
 
 # Ensure Docker is available
 docker_check
 
-info "Setup started, logging to $LOG_FILE"
+info "Setup started, logging to $LOGFILE"
 
 
 # Globals
@@ -45,8 +43,8 @@ ACTION=""
 
 bootstrap_config() {
   if $WHATIF; then
-    info "[WHAT-IF] Would expand ${APP_BASE}/config/environments.tpl.json into ${CONFIG_FILE}"
-    echo "[WHAT-IF] Ensuring app-level keys: build_home, project_base, docker_network, sqldb_root, sqldb_root_pass" >> "$LOG_FILE"
+    whatif "Would expand ${APP_BASE}/config/environments.tpl.json into ${CONFIG_FILE}"
+    whatif "Ensuring app-level keys: build_home, project_base, docker_network, sqldb_root, sqldb_root_pass" >> "$LOGFILE"
     return 0
   fi
 
@@ -84,8 +82,8 @@ bootstrap_config() {
 
 validate_config() {
   if $WHATIF; then
-    info "[WHAT-IF] Would validate JSON keys in $CONFIG_FILE"
-    echo "[WHAT-IF] Required keys: build_home, project_base, sqldb_root, sqldb_root_pass" >> "$LOG_FILE"
+    whatif "Would validate JSON keys in $CONFIG_FILE"
+    whatif "Required keys: build_home, project_base, sqldb_root, sqldb_root_pass" >> "$LOGFILE"
     return 0
   fi
 
@@ -116,8 +114,8 @@ validate_config() {
 
 setup_directories() {
   if $WHATIF; then
-    info "[WHAT-IF] Would ensure directories exist under $CONFIG_BASE"
-    echo "[WHAT-IF] Would create: $CONFIG_BASE/config and $CONFIG_BASE/tmp" >> "$LOG_FILE"
+    whatif "Would ensure directories exist under $CONFIG_BASE"
+    whatif "Would create: $CONFIG_BASE/config and $CONFIG_BASE/tmp" >> "$LOGFILE"
     return 0
   fi
 
@@ -127,8 +125,8 @@ setup_directories() {
 
 deploy_docker_assets() {
   if $WHATIF; then
-    info "[WHAT-IF] Would deploy Docker assets to $DOCKER_CONTEXT"
-    echo "[WHAT-IF] Would copy non-template assets from ${APP_BASE}/config/docker → $DOCKER_CONTEXT" >> "$LOG_FILE"
+    whatif "Would deploy Docker assets to $DOCKER_CONTEXT"
+    whatif "Would copy non-template assets from ${APP_BASE}/config/docker → $DOCKER_CONTEXT" >> "$LOGFILE"
     return 0
   fi
 
@@ -148,7 +146,7 @@ generate_env_file() {
   local TPL_FILE="${APP_BASE}/config/docker/env.app.tpl"
 
   if $WHATIF; then
-    info "[WHAT-IF] Would expand $TPL_FILE into $ENV_FILE using values from $CONFIG_FILE"
+    whatif "Would expand $TPL_FILE into $ENV_FILE using values from $CONFIG_FILE"
     return 0
   fi
 
@@ -183,7 +181,7 @@ generate_env_file() {
 
 check_assets() {
   if $WHATIF; then
-    info "[WHAT-IF] Would check for assets volume"
+    whatif "Would check for assets volume"
     return 0
   fi
 
@@ -197,8 +195,8 @@ check_assets() {
 
 setup_containers() {
   if $WHATIF; then
-    info "[WHAT-IF] Would start core containers (sqldb, sqladmin)..."
-    echo "[WHAT-IF] Would run: docker compose -f ${DOCKER_CONTEXT}/compose.setup.yml --env-file ${DOCKER_CONTEXT}/.env up -d sqldb sqladmin" >> "$LOG_FILE"
+    whatif "Would start core containers (sqldb, sqladmin)..."
+    whatif "Would run: docker compose -f ${DOCKER_CONTEXT}/compose.setup.yml --env-file ${DOCKER_CONTEXT}/.env up -d sqldb sqladmin" >> "$LOGFILE"
     return 0
   fi
 
@@ -219,8 +217,8 @@ setup_containers() {
 
 teardown_containers() {
   if $WHATIF; then
-    info "[WHAT-IF] Would stop core containers..."
-    echo "[WHAT-IF] Would run: docker compose -f ${DOCKER_CONTEXT}/compose.setup.yml --env-file ${DOCKER_CONTEXT}/.env down" >> "$LOG_FILE"
+    whatif "Would stop core containers..."
+    whatif "Would run: docker compose -f ${DOCKER_CONTEXT}/compose.setup.yml --env-file ${DOCKER_CONTEXT}/.env down" >> "$LOGFILE"
     return 0
   fi
 
@@ -230,8 +228,8 @@ teardown_containers() {
 
 reset_environment() {
   if $WHATIF; then
-    info "[WHAT-IF] Would reset environment (containers + volumes)..."
-    echo "[WHAT-IF] Would run: docker compose -f ${DOCKER_CONTEXT}/compose.setup.yml --env-file ${DOCKER_CONTEXT}/.env down -v" >> "$LOG_FILE"
+    whatif "Would reset environment (containers + volumes)..."
+    whatif "Would run: docker compose -f ${DOCKER_CONTEXT}/compose.setup.yml --env-file ${DOCKER_CONTEXT}/.env down -v" >> "$LOGFILE"
     return 0
   fi
 
@@ -296,7 +294,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       error "Unknown option: $1"
-      echo "Usage: $0 -a {init|up|down|reset} [-w|--what-if]"
+      warn "Usage: $0 -a {init|up|down|reset} [-w|--what-if]"
       exit 1
       ;;
   esac
@@ -314,16 +312,16 @@ case "${ACTION:-}" in
     success "Workspace ready at ${CONFIG_BASE}"
     check_assets
     setup_containers
-    info "--- SUMMARY: ${ACTION} completed at $(date) ---" >> "$LOG_FILE"
+    info "--- SUMMARY: ${ACTION} completed at $(date) ---" >> "$LOGFILE"
     info "Next step: provision a project with ./provision.sh -n <project>"
     ;;
   down)
     teardown_containers
-    info "--- SUMMARY: down completed at $(date) ---" >> "$LOG_FILE"
+    info "--- SUMMARY: down completed at $(date) ---" >> "$LOGFILE"
     ;;
   reset)
     reset_environment
-    info "--- SUMMARY: reset completed at $(date) ---" >> "$LOG_FILE"
+    info "--- SUMMARY: reset completed at $(date) ---" >> "$LOGFILE"
     ;;
   *)
     error "Unknown or missing action: $ACTION"

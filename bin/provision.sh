@@ -147,7 +147,7 @@ generate_env_file() {
 }
 
 generate_compose_file() {
-  COMPOSE_TPL="$APP_BASE/config/docker/compose.provision.yml"
+  COMPOSE_TPL="$APP_BASE/config/docker/compose.project.yml"
   COMPOSE_OUT="$PROJECT_BASE/docker/compose.project.yml"
 
   ensure_dir "$(dirname "$COMPOSE_OUT")"
