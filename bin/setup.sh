@@ -15,42 +15,36 @@ if [[ "$PWD" != "$APP_BASE" ]]; then
 fi
 
 mkdir -p "${CONFIG_BASE}"
-# Logging setup
-LOG_DIR="${APP_BASE}/logs"
-mkdir -p "$LOG_DIR"
-LOG_FILE="${LOG_DIR}/setup.log"
-exec > >(tee -a "$LOG_FILE") 2>&1
 
 # Source helpers
 source "${APP_BASE}/lib/output.sh"
 source "${APP_BASE}/lib/helpers.sh"
 
+# Resolve APP_BASE from environments.json
+#APP_BASE=$(jq -r '.app.build_home' "$CONFIG_FILE" | sed "s|\$HOME|$HOME|")
+
+# Ensure app-wide logs directory exists
+LOG_DIR="$APP_BASE/app/logs"
+ensure_dir "$LOG_DIR"
+
+# Setup log file (app-wide)
+LOG_FILE="$LOG_DIR/setup.log"
+
+# Redirect stdout and stderr to log file (and console)
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+# Ensure Docker is available
+docker_check
+
+info "Setup started, logging to $LOG_FILE"
+
+
 # Globals
 WHATIF=false
 ACTION=""
 
-# Parse flags
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    -w|--what-if)
-      WHATIF=true
-      shift
-      ;;
-    -a|--action)
-      [[ $# -lt 2 ]] && { error "Missing value for $1"; exit 1; }
-      ACTION="$2"
-      shift 2
-      ;;
-    *)
-      error "Unknown option: $1"
-      echo "Usage: $0 -a {init|up|down|reset} [-w|--what-if]"
-      exit 1
-      ;;
-  esac
-done
-
 bootstrap_config() {
-if $WHATIF; then
+  if $WHATIF; then
     info "[WHAT-IF] Would expand ${APP_BASE}/config/environments.tpl.json into ${CONFIG_FILE}"
     echo "[WHAT-IF] Ensuring app-level keys: build_home, project_base, docker_network, sqldb_root, sqldb_root_pass" >> "$LOG_FILE"
     return 0
@@ -203,16 +197,16 @@ check_assets() {
 
 setup_containers() {
   if $WHATIF; then
-    info "[WHAT-IF] Would start core containers (wpcli, sqldb, sqladmin)..."
-    echo "[WHAT-IF] Would run: docker compose -f ${DOCKER_CONTEXT}/compose.setup.yml --env-file ${DOCKER_CONTEXT}/.env up -d wpcli sqldb sqladmin" >> "$LOG_FILE"
+    info "[WHAT-IF] Would start core containers (sqldb, sqladmin)..."
+    echo "[WHAT-IF] Would run: docker compose -f ${DOCKER_CONTEXT}/compose.setup.yml --env-file ${DOCKER_CONTEXT}/.env up -d sqldb sqladmin" >> "$LOG_FILE"
     return 0
   fi
 
-  info "Starting core containers (wpcli, sqldb, sqladmin)..."
+  info "Starting core containers (sqldb, sqladmin)..."
   run_or_preview "Bring up core containers" \
-    docker compose -f "${DOCKER_CONTEXT}/compose.setup.yml" --env-file "${DOCKER_CONTEXT}/.env" up -d wpcli sqldb sqladmin
+    docker compose -f "${DOCKER_CONTEXT}/compose.setup.yml" --env-file "${DOCKER_CONTEXT}/.env" up -d sqldb sqladmin
 
-  for cname in ptekwpdev_wpcli ptekwpdev_db ptekwpdev_admin; do
+  for cname in ptekwpdev_db ptekwpdev_admin; do
     require_container_up "$cname" 20 3 || {
       error "Container $cname failed to start properly"
       exit 1
@@ -245,6 +239,69 @@ reset_environment() {
     docker compose -f "${DOCKER_CONTEXT}/compose.setup.yml" --env-file "${DOCKER_CONTEXT}/.env" down -v
 }
 
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") -a {init|up|down|reset} [-w|--what-if]
+
+Options:
+  -h, --help        Show this help message and exit
+  -a, --action      Specify the action to perform:
+                      init   → Initialize app-wide environment (network, sqldb, sqladmin)
+                      up     → Start app-wide containers
+                      down   → Stop app-wide containers
+                      reset  → Tear down and re-initialize environment
+  -w, --what-if     Dry-run mode: show what would be done without executing
+
+Description:
+  This script manages the app-wide WordPress development environment.
+  It will:
+    • Ensure app_base/logs/setup.log exists and capture all output
+    • Verify Docker and Docker Compose availability
+    • Create environments.json in config_base if missing (from environments.tpl.json)
+    • Perform the specified action (-a) on app-wide resources
+
+Examples:
+  Initialize environment:
+    ./setup.sh -a init
+
+  Start containers:
+    ./setup.sh -a up
+
+  Stop containers:
+    ./setup.sh -a down
+
+  Reset environment:
+    ./setup.sh -a reset
+
+  Dry-run initialization:
+    ./setup.sh -a init --what-if
+EOF
+}
+
+# Parse flags
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -w|--what-if)
+      WHATIF=true
+      shift
+      ;;
+    -a|--action)
+      [[ $# -lt 2 ]] && { error "Missing value for $1"; usage; exit 1; }
+      ACTION="$2"
+      shift 2
+      ;;
+    *)
+      error "Unknown option: $1"
+      echo "Usage: $0 -a {init|up|down|reset} [-w|--what-if]"
+      exit 1
+      ;;
+  esac
+done
+
 # Dispatcher
 case "${ACTION:-}" in
   init|up)
@@ -257,21 +314,21 @@ case "${ACTION:-}" in
     success "Workspace ready at ${CONFIG_BASE}"
     check_assets
     setup_containers
-    echo "--- SUMMARY: ${ACTION} completed at $(date) ---" >> "$LOG_FILE"
+    info "--- SUMMARY: ${ACTION} completed at $(date) ---" >> "$LOG_FILE"
+    info "Next step: provision a project with ./provision.sh -n <project>"
     ;;
   down)
     teardown_containers
-    echo "--- SUMMARY: down completed at $(date) ---" >> "$LOG_FILE"
+    info "--- SUMMARY: down completed at $(date) ---" >> "$LOG_FILE"
     ;;
   reset)
     reset_environment
-    echo "--- SUMMARY: reset completed at $(date) ---" >> "$LOG_FILE"
+    info "--- SUMMARY: reset completed at $(date) ---" >> "$LOG_FILE"
     ;;
   *)
     error "Unknown or missing action: $ACTION"
-    echo "Usage: $0 -a {init|up|down|reset} [-w|--what-if]"
+    info "Usage: $0 -a {init|up|down|reset} [-w|--what-if]"
     exit 1
     ;;
 esac
 
-echo "Next step: provision a project with ./provision.sh -n <project>"

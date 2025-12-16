@@ -136,3 +136,52 @@ resolve_container_name() {
   fi
   docker inspect --format '{{.Name}}' "$id" | sed 's/^\///'
 }
+
+docker_check() {
+  if ! command -v docker >/dev/null 2>&1; then
+    error "Docker is not installed or not in PATH. Please install Docker before running this script."
+    exit 1
+  fi
+
+  if ! docker info >/dev/null 2>&1; then
+    error "Docker daemon is not running or not accessible. Please start Docker before running this script."
+    exit 1
+  fi
+
+  # Optional: check docker compose availability
+  if ! docker compose version >/dev/null 2>&1; then
+    error "Docker Compose v2 is not available. Please install or upgrade Docker Compose."
+    exit 1
+  fi
+
+  info "Docker and Docker Compose are available and running."
+}
+
+log_env_expansion() {
+  local project_json="$1"
+  local env_file="$2"
+
+  info "Sanity check: keys expanded into $env_file"
+
+  for key in $(echo "$project_json" | jq -r 'keys[]'); do
+    [[ "$key" == "secrets" ]] && continue
+    val=$(echo "$project_json" | jq -r ".${key}")
+    if grep -q "{{${key}}}" "$env_file"; then
+      warn "⚠️ Placeholder {{${key}}} still present in $env_file"
+    else
+      info "✔ Expanded ${key} → ${val}"
+    fi
+  done
+
+  # Check secrets separately
+  secrets_json=$(echo "$project_json" | jq -r '.secrets // empty')
+  if [[ -n "$secrets_json" && "$secrets_json" != "null" ]]; then
+    for key in $(echo "$secrets_json" | jq -r 'keys[]'); do
+      if grep -q "{{${key}}}" "$env_file"; then
+        warn "⚠️ Secret placeholder {{${key}}} still present in $env_file"
+      else
+        info "✔ Expanded secret ${key} → [*****]"
+      fi
+    done
+  fi
+}

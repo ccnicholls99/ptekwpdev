@@ -15,10 +15,3 @@ NETWORK_NAME={{docker_network}}
 # SQL Admin defaults
 SQLADMIN_IMAGE={{sqladmin_image}}
 SQLADMIN_PORT={{sqladmin_port}}
-
-# Wordpress defaults (apply across app-wide containers)
-WORDPRESS_IMAGE={{wordpress_image}}
-WORDPRESS_DEBUG=0
-WORDPRESS_DEBUG_LOG=false
-WORDPRESS_DISABLE_FATAL=true
-WORDPRESS_SCHEME=http

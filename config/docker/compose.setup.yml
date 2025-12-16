@@ -1,17 +1,6 @@
 #version: "3.9"
 
 services:
-  wpcli:
-    container_name: ptekwpdev_wpcli
-    build:
-      context: .
-      dockerfile: Dockerfile.wpcli
-    volumes:
-      - ptekwpdev_assets_volume:/usr/src/ptekwpdev/assets
-    networks:
-      - appnet
-    restart: unless-stopped
-
   sqldb:
     image: mysql:8.0
     container_name: ptekwpdev_db
