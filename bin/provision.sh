@@ -101,6 +101,7 @@ resolve_project() {
   ensure_dir "$LOG_DIR"
   LOGFILE="$LOG_DIR/provision.log"
   export LOGFILE
+  log_header "Provision: $PROJECT"
   #exec > >(tee -a "$LOGFILE") 2>&1
 
   info "Resolved project: $PROJECT_BASE (domain=$HOST_DOMAIN)"
@@ -111,9 +112,9 @@ scaffold_directories() {
     whatif "Would scaffold under $PROJECT_BASE: app, bin, docker, src, app/config/docker, app/config/nginx"
   else
     ensure_dir "$PROJECT_BASE"
-    for dir in app bin docker src; do ensure_dir "$PROJECT_BASE/$dir"; done
-    ensure_dir "$PROJECT_BASE/app/config/docker"
-    ensure_dir "$PROJECT_BASE/app/config/nginx"
+    for dir in app config docker src; do ensure_dir "$PROJECT_BASE/$dir"; done
+    ensure_dir "$PROJECT_BASE/config/proxy"
+    ensure_dir "$PROJECT_BASE/config/wordpress"
     success "Scaffold created under $PROJECT_BASE"
   fi
 }
@@ -152,7 +153,46 @@ generate_env_file() {
   success ".env file generated for $PROJECT"
 }
 
-generate_compose_file() {
+deploy_docker_assets() {
+  # Project-local Docker ignore file
+  DOCKERIGNORE_SRC="$APP_BASE/config/docker/.dockerignore.project"
+  DOCKERIGNORE_DST="$PROJECT_BASE/docker/.dockerignore"
+
+  if [[ -f "$DOCKERIGNORE_SRC" ]]; then
+    if [[ "$WHATIF" == true ]]; then
+      whatif "Would copy project Docker ignore file from $DOCKERIGNORE_SRC → $DOCKERIGNORE_DST"
+    else
+      cp "$DOCKERIGNORE_SRC" "$DOCKERIGNORE_DST"
+      info "Copied project Docker ignore file from $DOCKERIGNORE_SRC → $DOCKERIGNORE_DST"
+    fi
+  fi
+
+  # WordPress Dockerfile
+  DOCKER_SRC="$APP_BASE/config/docker/Dockerfile.wordpress"
+  DOCKER_DST="$PROJECT_BASE/docker/Dockerfile.wordpress"
+
+  if [[ -f "$DOCKER_SRC" ]]; then
+    if [[ "$WHATIF" == true ]]; then
+      whatif "Would copy WordPress Dockerfile from $DOCKER_SRC → $DOCKER_DST"
+    else
+      cp "$DOCKER_SRC" "$DOCKER_DST"
+      info "Copied WordPress Dockerfile from $DOCKER_SRC → $DOCKER_DST"
+    fi
+  fi
+
+  # WP-CLI Dockerfile
+  WPCLI_SRC="$APP_BASE/docker/Dockerfile.wpcli"
+  WPCLI_DST="$PROJECT_BASE/docker/Dockerfile.wpcli"
+
+  if [[ -f "$WPCLI_SRC" ]]; then
+    if [[ "$WHATIF" == true ]]; then
+      whatif "Would copy WP-CLI Dockerfile from $WPCLI_SRC → $WPCLI_DST"
+    else
+      cp "$WPCLI_SRC" "$WPCLI_DST"
+      info "Copied WP-CLI Dockerfile from $WPCLI_SRC → $WPCLI_DST"
+    fi
+  fi
+
   COMPOSE_TPL="$APP_BASE/config/docker/compose.project.yml"
   COMPOSE_OUT="$PROJECT_BASE/docker/compose.project.yml"
   ensure_dir "$(dirname "$COMPOSE_OUT")"
@@ -165,6 +205,40 @@ generate_compose_file() {
   fi
 }
 
+init_project() {
+  # Proxy resources
+  PROXY_SRC="$APP_BASE/config/proxy"
+  PROXY_DST="$PROJECT_BASE/config/proxy"
+
+  if [[ -d "$PROXY_SRC" ]]; then
+    if [[ "$WHATIF" == true ]]; then
+      whatif "Would copy proxy resources from $PROXY_SRC → $PROXY_DST"
+    else
+      mkdir -p "$PROXY_DST"
+      cp -r "$PROXY_SRC"/* "$PROXY_DST"/
+      info "Copied proxy resources from $PROXY_SRC → $PROXY_DST"
+    fi
+  else
+    error "Proxy source directory not found: $PROXY_SRC"
+  fi
+
+  # WordPress resources ini
+  WP_RESOURCES_SRC="$APP_BASE/config/wordpress/ptek-resources.ini"
+  WP_RESOURCES_DST="$PROJECT_BASE/config/wordpress/ptek-resources.ini"
+
+  if [[ -f "$WP_RESOURCES_SRC" ]]; then
+    if [[ "$WHATIF" == true ]]; then
+      whatif "Would copy WordPress resources ini from $WP_RESOURCES_SRC → $WP_RESOURCES_DST"
+    else
+      mkdir -p "$(dirname "$WP_RESOURCES_DST")"
+      cp "$WP_RESOURCES_SRC" "$WP_RESOURCES_DST"
+      info "Copied WordPress resources ini from $WP_RESOURCES_SRC → $WP_RESOURCES_DST"
+    fi
+  else
+    error "WordPress resources ini not found: $WP_RESOURCES_SRC" 
+  fi
+}
+
 provision_project() {
   parse_options "$@"
   resolve_project
@@ -173,8 +247,9 @@ provision_project() {
   case "$ACTION" in
     init)
       scaffold_directories
+      init_project
       generate_env_file
-      generate_compose_file
+      deploy_docker_assets
       ;;
     up)
       $WHATIF && whatif "docker compose up -d" || docker compose -f "$PROJECT_BASE/docker/compose.project.yml" up -d
@@ -189,7 +264,7 @@ provision_project() {
         docker compose -f "$PROJECT_BASE/docker/compose.project.yml" down
         scaffold_directories
         generate_env_file
-        generate_compose_file
+        deploy_docker_assets
         docker compose -f "$PROJECT_BASE/docker/compose.project.yml" up -d
       fi
       ;;

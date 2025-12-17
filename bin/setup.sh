@@ -24,6 +24,8 @@ mkdir -p "${LOG_DIR}"
 LOGFILE="$LOG_DIR/setup.log"
 export LOGFILE
 . "$APP_BASE/lib/output.sh"
+log_header "Setup"
+
 
 source "${APP_BASE}/lib/helpers.sh"
 

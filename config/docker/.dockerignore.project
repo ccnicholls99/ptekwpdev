@@ -1,0 +1,27 @@
+# Project-local Docker ignore rules
+# These apply only to builds from ${PROJECT_BASE}/docker
+
+# Runtime mounts (never bake into image)
+assets/
+certs/
+secrets/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# VCS metadata
+.git
+.gitignore
+
+# Provisioned scaffolding not needed in image
+.env
+compose.project.yml
+
+# Ignore any local override files
+docker-compose.override.yml

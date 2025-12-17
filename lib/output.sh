@@ -35,6 +35,18 @@ timestamp() {
   date +"%Y-%m-%d %H:%M:%S"
 }
 
+log_header() {
+  local process_name="$1"
+  local timestamp
+  timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+
+  echo "" >> "$LOGFILE"
+  echo "==================================================" >> "$LOGFILE"
+  echo ">>> START ${process_name} run at ${timestamp}" >> "$LOGFILE"
+  echo "==================================================" >> "$LOGFILE"
+  echo "" >> "$LOGFILE"
+}
+
 _log() {
   local level="$1"; shift
   local color="$1"; shift

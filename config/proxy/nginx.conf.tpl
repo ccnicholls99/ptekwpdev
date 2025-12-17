@@ -10,6 +10,7 @@ http {
 
     error_log /var/log/nginx/error80.log info;
 
+    # Redirect all HTTP traffic to HTTPS
     return 301 https://$host$request_uri;
   }
 
@@ -20,10 +21,10 @@ http {
 
     error_log /var/log/nginx/error443.log info;
 
-    ssl_certificate /etc/nginx/certs/${PROJECT_DOMAIN}.crt;
+    ssl_certificate     /etc/nginx/certs/${PROJECT_DOMAIN}.crt;
     ssl_certificate_key /etc/nginx/certs/${PROJECT_DOMAIN}.key;
-    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
-    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_protocols       TLSv1 TLSv1.1 TLSv1.2;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
 
     location / {
       proxy_buffering off;
@@ -33,5 +34,27 @@ http {
 
       proxy_pass ${WORDPRESS_URL};
     }
+
+    # Optional static asset caching for performance
+    location ~* \.(?:ico|css|js|gif|jpe?g|png|woff2?|ttf|svg)$ {
+      root /var/www/html/wp-content;
+      access_log off;
+      expires max;
+    }
+  }
+
+  # Catch-all for unmatched domains
+  server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
+
+    server_name _;
+
+    ssl_certificate     /etc/ssl/certs/default.crt;
+    ssl_certificate_key /etc/ssl/certs/default.key;
+
+    return 404;
   }
 }

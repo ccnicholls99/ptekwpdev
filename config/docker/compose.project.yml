@@ -2,12 +2,16 @@
 
 services:
   ${PROJECT_NAME}_wp:
-    image: wordpress:6.7
+    build:
+      context: ${PROJECT_BASE}/docker
+      dockerfile: Dockerfile.wordpress
+      args:
+        WORDPRESS_IMAGE: ${WORDPRESS_IMAGE}
     container_name: ${PROJECT_NAME}_wp
     environment:
       WORDPRESS_DB_HOST: ptekwpdev_db
-      WORDPRESS_DB_USER: ${PROJECT_NAME}_user
-      WORDPRESS_DB_PASSWORD: ${PROJECT_NAME}_pass
+      WORDPRESS_DB_USER: ${SQLDB_USER}
+      WORDPRESS_DB_PASSWORD: ${SQLDB_PASS}
       WORDPRESS_DB_NAME: ${PROJECT_NAME}_db
     volumes:
       - ${HOME}/.ptekwpdev/projects/${PROJECT_NAME}/assets:/var/www/html/wp-content
@@ -15,8 +19,39 @@ services:
       - ${HOME}/.ptekwpdev/projects/${PROJECT_NAME}/secrets:/run/secrets
     networks:
       - ptekwpdev_net
+    restart: unless-stopped
+
+  ${PROJECT_NAME}_wpcli:
+    build:
+      context: ${PROJECT_BASE}/docker
+      dockerfile: Dockerfile.wpcli
+      args:
+        WORDPRESS_IMAGE: ${WORDPRESS_IMAGE}
+    container_name: ${PROJECT_NAME}_wpcli
+    depends_on:
+    - ${PROJECT_NAME}_wp
+    volumes:
+      - ${HOME}/.ptekwpdev/projects/${PROJECT_NAME}/assets:/var/www/html/wp-content
+      - ${HOME}/.ptekwpdev/projects/${PROJECT_NAME}/certs:/etc/ssl/certs
+      - ${HOME}/.ptekwpdev/projects/${PROJECT_NAME}/secrets:/run/secrets
+    networks:
+      - ptekwpdev_net
+    entrypoint: wp
+
+  ${PROJECT_NAME}_proxy:
+    image: nginx:alpine
+    container_name: ${PROJECT_NAME}_proxy
+    depends_on:
+      - ${PROJECT_NAME}_wp
+    volumes:
+      - ${APP_BASE}/config/proxy/nginx.tpl.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${HOME}/.ptekwpdev/projects/${PROJECT_NAME}/assets:/var/www/html/wp-content
+      - ${HOME}/.ptekwpdev/projects/${PROJECT_NAME}/certs:/etc/ssl/certs
+    networks:
+      - ptekwpdev_net
     ports:
-      - "${PROJECT_PORT}:80"
+      - "${WORDPRESS_PORT}:80"
+      - "${WORDPRESS_SSL_PORT:-443}:443"
     restart: unless-stopped
 
 networks:
