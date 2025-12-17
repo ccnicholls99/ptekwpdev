@@ -1,4 +1,4 @@
-FROM wordpress:php8.1 AS wpbuild
+FROM wordpress:latest AS wpbuild
 
 # Updates from https://github.com/RobDWaller/dusty/blob/master/docker/Dockerfile
 # add PHP Composer to the stack
@@ -31,9 +31,7 @@ RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
 # Extend PHP Resource limits
 COPY config/wordpress/ptek-resources.ini /usr/local/etc/php/conf.d/
 
-#COPY --from=build /etc/apache2 config/apache/wp
-
-
+# Second stage to copy apache config
 FROM wpbuild AS wpconfigure
 WORKDIR /etc
 COPY --from=wpbuild /etc/apache2 config/apache/wp

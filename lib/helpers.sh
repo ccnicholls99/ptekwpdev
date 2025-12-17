@@ -1,13 +1,65 @@
 #!/usr/bin/env bash
 # Common helper functions for PtekWPDev
 
-# Ensure a directory exists
+# === Usage documentation ===
+helpers_usage() {
+  cat <<'EOF'
+PtekWPDev Helpers - Available Functions
+---------------------------------------
+
+Directory utilities:
+  ensure_dir <dir>
+    Ensure a directory exists (mkdir -p if missing).
+
+Copy utilities:
+  copy_tpl <tpl> <dest>
+    Copy a template file to destination if it exists.
+  copy_if_newer <src> <dst> <description> [patch_cmd]
+    Copy a file only if source is newer than target.
+    Optionally apply a patch command (like sed) before writing.
+
+Binary checks:
+  check_binary <bin>
+    Verify that a required binary is available in PATH.
+
+Env expansion:
+  expand_env_file <src> <dest>
+    Expand environment variables in a template file using envsubst.
+  log_env_expansion <project_json> <env_file>
+    Sanity check that placeholders in env_file were expanded.
+
+Backup utility:
+  backup_config <config_file>
+    Create a timestamped backup of environments.json or other config.
+
+Audit logging:
+  log_copy <src> <dest>
+    Log a copy operation to LOGFILE for auditability.
+
+WHAT-IF support:
+  parse_what_if <arg>
+    Parse -w/--what-if flag to enable dry-run mode.
+  run_or_preview <description> <command> [args...]
+    Run or preview an action depending on WHAT_IF flag.
+
+Docker helpers:
+  require_container_up <container> [retries] [delay]
+    Wait until a container is running and reachable.
+  resolve_container_name <compose_file> <service>
+    Resolve container name for a given service in a compose file.
+  docker_check
+    Verify Docker and Docker Compose availability.
+
+EOF
+}
+
+# === Directory utilities ===
 ensure_dir() {
   local dir="$1"
-  if [[ ! -d "$dir" ]]; then
-    mkdir -p "$dir"
-  fi
+  [[ -d "$dir" ]] || mkdir -p "$dir"
 }
+
+# === Copy utilities ===
 
 # Copy a template file to a destination if it exists
 copy_tpl() {
@@ -15,86 +67,101 @@ copy_tpl() {
   local dest="$2"
   if [[ -f "$tpl" ]]; then
     cp "$tpl" "$dest"
+    log_copy "$tpl" "$dest"
     return 0
   else
     return 1
   fi
 }
 
-# Check if a required binary is available
+# Copy a file only if the source is newer than the target.
+# Optionally apply a patch command (like sed) before writing.
+# Usage: copy_if_newer <src> <dst> <description> [patch_cmd]
+copy_if_newer() {
+  local src="$1" dst="$2" desc="$3" patch_cmd="${4:-}"
+
+  if [[ ! -f "$src" ]]; then
+    error "Source file not found: $src"
+    return 1
+  fi
+
+  if [[ ! -f "$dst" || "$src" -nt "$dst" ]]; then
+    if [[ "$WHAT_IF" == true ]]; then
+      whatif "Would copy $desc from $src → $dst"
+    else
+      ensure_dir "$(dirname "$dst")"
+      if [[ -n "$patch_cmd" ]]; then
+        $patch_cmd "$src" > "$dst"
+        info "Patched and copied $desc from $src → $dst"
+      else
+        cp "$src" "$dst"
+        info "Copied $desc from $src → $dst"
+      fi
+      log_copy "$src" "$dst"
+    fi
+  else
+    info "Skipped $desc (target newer than source: $dst)"
+  fi
+}
+
+# === Binary checks ===
 check_binary() {
   local bin="$1"
   if ! command -v "$bin" >/dev/null 2>&1; then
-    echo "[ERR] Required binary '$bin' not found in PATH" >&2
+    error "Required binary '$bin' not found in PATH"
     exit 1
   fi
 }
 
-# Expand environment variables in a file using envsubst
+# === Env expansion ===
 expand_env_file() {
-  local src="$1"
-  local dest="$2"
+  local src="$1" dest="$2"
   if [[ -f "$src" ]]; then
     envsubst < "$src" > "$dest"
+    log_copy "$src" "$dest"
   else
-    echo "[WARN] Template file $src not found" >&2
+    warn "Template file $src not found"
   fi
 }
 
-# === New: Backup utility for environments.json ===
+# === Backup utility ===
 backup_config() {
   local config_file="$1"
-  local backup_dir
-  backup_dir="$(dirname "$config_file")"
-  local timestamp
-  timestamp="$(date +%Y%m%d_%H%M%S)"
+  local backup_dir="$(dirname "$config_file")"
+  local timestamp="$(date +%Y%m%d_%H%M%S)"
   local backup_file="${backup_dir}/$(basename "$config_file").${timestamp}.bak"
 
   if [[ -f "$config_file" ]]; then
     cp "$config_file" "$backup_file"
-    echo "[INFO] Backup created: $backup_file"
+    info "Backup created: $backup_file"
   else
-    echo "[WARN] Config file $config_file not found, skipping backup"
+    warn "Config file $config_file not found, skipping backup"
   fi
 }
 
-# Log a copy operation for auditability
+# === Audit logging ===
 log_copy() {
-  local src="$1"
-  local dest="$2"
-  local ts
-  ts="$(date '+%Y-%m-%d %H:%M:%S')"
+  local src="$1" dest="$2"
+  local ts="$(date '+%Y-%m-%d %H:%M:%S')"
 
-  # Ensure audit log directory exists
-  mkdir -p "${APP_BASE}/logs"
+  if [[ -z "${LOGFILE:-}" ]]; then
+    echo "[WARN] LOGFILE not set, cannot log copy operation" >&2
+    return 1
+  fi
 
-  echo "[$ts] COPY: $src → $dest" >> "${APP_BASE}/logs/assets.log"
+  echo "[$ts] COPY: $src → $dest" >> "$LOGFILE"
 }
 
-# === New: WHAT-IF (dry run) support ===
-
-# Global flag (default: false)
+# === WHAT-IF support ===
 WHAT_IF=false
-
-# Parse what-if option from args
-# Usage: if parse_what_if "$1"; then shift; fi
 parse_what_if() {
   case "$1" in
-    -w|--what-if)
-      WHAT_IF=true
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
+    -w|--what-if) WHAT_IF=true; return 0 ;;
+    *) return 1 ;;
   esac
 }
-
-# Run or preview an action
-# Usage: run_or_preview "Description" command args...
 run_or_preview() {
-  local description="$1"
-  shift
+  local description="$1"; shift
   if [[ "$WHAT_IF" == true ]]; then
     echo "[WHAT-IF] Would: $description"
   else
@@ -102,6 +169,7 @@ run_or_preview() {
   fi
 }
 
+# === Docker helpers ===
 require_container_up() {
   local container="$1"
   local retries="${2:-10}"
@@ -114,20 +182,17 @@ require_container_up() {
         return 0
       fi
     fi
-    echo "[INFO] Waiting for container '$container' to be up... (attempt $attempt/$retries)"
+    info "Waiting for container '$container' to be up... (attempt $attempt/$retries)"
     sleep "$delay"
     (( attempt++ ))
   done
 
-  echo "[ERR] Container '$container' is not running or reachable after $retries attempts."
+  error "Container '$container' is not running or reachable after $retries attempts."
   exit 1
 }
 
-# === Resolve container name for a service ===
 resolve_container_name() {
-  local compose_file="$1"
-  local service="$2"
-
+  local compose_file="$1" service="$2"
   local id
   id="$(docker compose -f "$compose_file" ps -q "$service" || true)"
   if [[ -z "$id" ]]; then
@@ -148,7 +213,6 @@ docker_check() {
     exit 1
   fi
 
-  # Optional: check docker compose availability
   if ! docker compose version >/dev/null 2>&1; then
     error "Docker Compose v2 is not available. Please install or upgrade Docker Compose."
     exit 1
@@ -157,9 +221,9 @@ docker_check() {
   info "Docker and Docker Compose are available and running."
 }
 
+# === Env expansion sanity check ===
 log_env_expansion() {
-  local project_json="$1"
-  local env_file="$2"
+  local project_json="$1" env_file="$2"
 
   info "Sanity check: keys expanded into $env_file"
 
@@ -173,7 +237,6 @@ log_env_expansion() {
     fi
   done
 
-  # Check secrets separately
   secrets_json=$(echo "$project_json" | jq -r '.secrets // empty')
   if [[ -n "$secrets_json" && "$secrets_json" != "null" ]]; then
     for key in $(echo "$secrets_json" | jq -r 'keys[]'); do

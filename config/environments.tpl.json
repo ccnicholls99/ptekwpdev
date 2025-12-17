@@ -24,6 +24,7 @@
       "wordpress_image": "php8.1",
       "wordpress_version": "latest",
       "wordpress_port": "5210",
+      "wordpress_host": "wordpress",
       "secrets": {
         "sqldb_name": "ptekdemodb",
         "sqldb_user": "ptekdemodbu",

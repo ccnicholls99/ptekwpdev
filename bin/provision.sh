@@ -112,7 +112,7 @@ scaffold_directories() {
     whatif "Would scaffold under $PROJECT_BASE: app, bin, docker, src, app/config/docker, app/config/nginx"
   else
     ensure_dir "$PROJECT_BASE"
-    for dir in app config docker src; do ensure_dir "$PROJECT_BASE/$dir"; done
+    for dir in app bin config docker src; do ensure_dir "$PROJECT_BASE/$dir"; done
     ensure_dir "$PROJECT_BASE/config/proxy"
     ensure_dir "$PROJECT_BASE/config/wordpress"
     success "Scaffold created under $PROJECT_BASE"
@@ -153,6 +153,19 @@ generate_env_file() {
   success ".env file generated for $PROJECT"
 }
 
+# Patch FROM line in Dockerfile.wordpress
+# Do not call directly; use copy_if_newer with this as callback
+# Patch only the FROM line that references the wordpress image tag
+patch_wordpress_from_cb() {
+  awk -v img="$WORDPRESS_IMAGE" '
+    /^FROM[[:space:]]+wordpress:/ {
+      print "FROM wordpress:" img " AS wpbuild"
+      next
+    }
+    { print }
+  ' "$1"
+}
+
 deploy_docker_assets() {
   # Project-local Docker ignore file
   DOCKERIGNORE_SRC="$APP_BASE/config/docker/.dockerignore.project"
@@ -167,17 +180,22 @@ deploy_docker_assets() {
     fi
   fi
 
-  # WordPress Dockerfile
+  # WordPress Dockerfile, replace image and version, then deploy to project
+  # WordPress Dockerfile (patched with correct image version)
   DOCKER_SRC="$APP_BASE/config/docker/Dockerfile.wordpress"
   DOCKER_DST="$PROJECT_BASE/docker/Dockerfile.wordpress"
+  WORDPRESS_IMAGE=$(echo "$PROJECT_CONFIG" | jq -r '.wordpress_image // "php8.1"')
 
-  if [[ -f "$DOCKER_SRC" ]]; then
-    if [[ "$WHATIF" == true ]]; then
-      whatif "Would copy WordPress Dockerfile from $DOCKER_SRC → $DOCKER_DST"
-    else
-      cp "$DOCKER_SRC" "$DOCKER_DST"
-      info "Copied WordPress Dockerfile from $DOCKER_SRC → $DOCKER_DST"
-    fi
+  copy_if_newer "$APP_BASE/config/docker/Dockerfile.wordpress" \
+              "$PROJECT_BASE/docker/Dockerfile.wordpress" \
+              "Dockerfile.wordpress" \
+              patch_wordpress_from_cb
+
+  # Sanity check: confirm FROM line in target Dockerfile
+  if [[ -f "$PROJECT_BASE/docker/Dockerfile.wordpress" ]]; then
+    local from_line
+    from_line="$(head -1 "$PROJECT_BASE/docker/Dockerfile.wordpress")"
+    info "Sanity check: Dockerfile.wordpress FROM line → ${from_line}"
   fi
 
   # WP-CLI Dockerfile
@@ -236,6 +254,21 @@ init_project() {
     fi
   else
     error "WordPress resources ini not found: $WP_RESOURCES_SRC" 
+  fi
+
+  # Project control script
+  PROJECT_SCRIPT_SRC="$APP_BASE/config/bsh/project.sh.tpl"
+  PROJECT_SCRIPT_DST="$PROJECT_BASE/bin/project.sh"
+
+  if [[ -f "$PROJECT_SCRIPT_SRC" ]]; then
+    if [[ "$WHATIF" == true ]]; then
+      whatif "Would install project control script from $PROJECT_SCRIPT_SRC → $PROJECT_SCRIPT_DST"
+    else
+      mkdir -p "$(dirname "$PROJECT_SCRIPT_DST")"
+      cp "$PROJECT_SCRIPT_SRC" "$PROJECT_SCRIPT_DST"
+      chmod +x "$PROJECT_SCRIPT_DST"
+      info "Installed project control script at $PROJECT_SCRIPT_DST"
+    fi
   fi
 }
 
