@@ -2,7 +2,7 @@
   "app": {
     "build_home": "$HOME/ptekwpdev",
     "project_base": "$HOME/projects/ptwpdev",
-    "docker_network": "ptekwpdev_network",
+    "network_name": "ptekdev_backend",
     "sqldb_port": "3306",
     "sqldb_image": "mariadb:10.11",
     "sqldb_version": "10.5",
@@ -21,9 +21,11 @@
       "description": "Demo Test WordPress development environment",
       "base_dir": "/ptekdemo",
       "project_domain": "ptekdemo.dev",
+      "project_network": "$PROJECT_NAME_frontend",
       "wordpress_image": "php8.1",
       "wordpress_version": "latest",
       "wordpress_port": "5210",
+      "wordpress_ssl_port": "5211",
       "wordpress_host": "wordpress",
       "secrets": {
         "sqldb_name": "ptekdemodb",
@@ -33,6 +35,34 @@
         "wp_admin_pass": "ChangeMe1!",
         "wp_admin_email": "admin@ptekdemo.dev",
         "jwt_secret": "1234567890!@#$%^&*()"
+      },
+      "dev_sources": {
+        "themes": [
+          { 
+            "name": "mytheme", 
+            "source": "/home/craig/dev/mytheme", 
+            "type": "local",
+            "init_git": false 
+          },
+          { 
+            "name": "remotetheme", 
+            "source": "https://github.com/org/theme.git", 
+            "type": "git" 
+          }
+        ],
+        "plugins": [
+          { 
+            "name": "myplugin", 
+            "source": "/home/craig/dev/myplugin", 
+            "type": "local",
+            "init_git": false 
+          },
+          { 
+            "name": "remoteplugin", 
+            "source": "git@github.com:org/plugin.git", 
+            "type": "git" 
+          }
+        ]
       }
     }
   }

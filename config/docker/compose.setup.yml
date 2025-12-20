@@ -9,7 +9,7 @@ services:
     volumes:
       - ptekwpdev_db_volume:/var/lib/mysql
     networks:
-      - appnet
+      - backend
     ports:
       - "${SQLDB_PORT}:3306"
     restart: unless-stopped
@@ -20,7 +20,7 @@ services:
     ports:
       - "${SQLADMIN_PORT}:8080"
     networks:
-      - appnet
+      - backend
     restart: unless-stopped
 
 volumes:
@@ -28,6 +28,6 @@ volumes:
   ptekwpdev_db_volume:
 
 networks:
-  appnet:
+  backend:
     name: ${NETWORK_NAME}
-    external: false
+    driver: bridge

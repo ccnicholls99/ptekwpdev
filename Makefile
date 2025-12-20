@@ -52,3 +52,22 @@ assets:
 # Allow shorthand: "make demo" → runs setup for project=demo
 %:
 	@$(MAKE) setup PROJECT=$@
+
+# ---------------------------------------------------------
+# Cleanup targets
+# ---------------------------------------------------------
+
+# Cleanup a single project (project-only cleanup)
+clean-project:
+	@echo "Cleaning project (project-only): $(PROJECT_NAME)"
+	@bin/cleanup-project.sh $(PROJECT) --no-prompt
+
+# Cleanup ALL projects (project-only cleanup)
+clean-all-projects:
+	@echo "Cleaning ALL projects (project-only)"
+	@bin/cleanup-project.sh --all --no-prompt
+
+# Full teardown: all projects + app-wide Docker + CONFIG_BASE
+clean-all:
+	@echo "Performing FULL teardown of all deployed assets"
+	@bin/cleanup-all.sh --no-prompt

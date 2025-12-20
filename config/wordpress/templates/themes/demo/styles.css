@@ -1,0 +1,14 @@
+/*
+Theme Name: Minimal Test Theme
+Theme URI: http://example.com/minimaltesttheme
+Author: Provisioning System
+Author URI: http://example.com
+Description: A minimal test theme for WordPress provisioning
+Version: 1.0
+License: GNU General Public License v2 or later
+Text Domain: minimaltesttheme
+*/
+
+body {
+  font-family: sans-serif;
+}

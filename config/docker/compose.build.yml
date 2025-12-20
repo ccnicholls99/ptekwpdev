@@ -1,4 +1,9 @@
 #
+# !!! This compose is obsolete, use compose.setup.yml and compose.project.yml instead!!!
+#
+
+
+#
 # Depends on .env file
 #
 services:

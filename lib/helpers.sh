@@ -53,6 +53,15 @@ Docker helpers:
 EOF
 }
 
+confirm() {
+  local prompt="$1"
+  read -r -p "$prompt (y/N): " reply
+  case "$reply" in
+    [yY][eE][sS]|[yY]) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # === Directory utilities ===
 ensure_dir() {
   local dir="$1"
@@ -105,12 +114,25 @@ copy_if_newer() {
 }
 
 # === Binary checks ===
+# Usage: check_binary docker git jq
 check_binary() {
-  local bin="$1"
-  if ! command -v "$bin" >/dev/null 2>&1; then
-    error "Required binary '$bin' not found in PATH"
+  local missing=()
+  for bin in "$@"; do
+    if ! command -v "$bin" >/dev/null 2>&1; then
+      missing+=("$bin")
+    fi
+  done
+
+  if (( ${#missing[@]} > 0 )); then
+    error "Required binaries not found: ${missing[*]}"
     exit 1
   fi
+
+  for bin in "$@"; do
+    local version
+    version="$($bin --version 2>/dev/null || echo "available")"
+    info "$bin available: $version"
+  done
 }
 
 # === Env expansion ===
@@ -247,4 +269,53 @@ log_env_expansion() {
       fi
     done
   fi
+}
+
+# === Git availability check ===
+git_check() {
+  if ! command -v git >/dev/null 2>&1; then
+    error "Git is not installed or not in PATH. Please install Git before running this script."
+    exit 1
+  fi
+
+  # Optional: sanity check version
+  local version
+  version="$(git --version 2>/dev/null)"
+  info "Git available: $version"
+}
+
+# === Dev code deployment ===
+deploy_dev_code() {
+  local source="$1"
+  local target_subdir="$2"   # "themes" or "plugins"
+
+  if [[ -z "$source" ]]; then
+    warn "No dev source specified, skipping deployment"
+    return 0
+  fi
+
+  # Ensure container is up
+  require_container_up "$WP_CONTAINER"
+
+  if [[ "$WHAT_IF" == true ]]; then
+    whatif "Deploy $source → $WP_CONTAINER:$WP_VOLUME_PATH/$target_subdir"
+    return 0
+  fi
+
+  if [[ -d "$source" ]]; then
+    info "Deploying local dev source $source → $WP_CONTAINER:$WP_VOLUME_PATH/$target_subdir"
+    docker cp "$source" "$WP_CONTAINER:$WP_VOLUME_PATH/$target_subdir"
+  elif [[ "$source" =~ ^git@|^https:// ]]; then
+    tmpdir="$(mktemp -d)"
+    info "Cloning git repo $source into $tmpdir"
+    git clone "$source" "$tmpdir"
+    info "Deploying cloned repo → $WP_CONTAINER:$WP_VOLUME_PATH/$target_subdir"
+    docker cp "$tmpdir" "$WP_CONTAINER:$WP_VOLUME_PATH/$target_subdir"
+    rm -rf "$tmpdir"
+  else
+    error "Unsupported dev source: $source"
+    return 1
+  fi
+
+  info "Deployment complete: $target_subdir"
 }

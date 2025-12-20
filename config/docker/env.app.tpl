@@ -2,6 +2,9 @@
 # App-wide Environment Settings for ptekwpdev
 # --------------------------------------------------------------------
 
+# Network for backend containers
+BACKEND_NETWORK={{network_name}}
+
 # SQL Database root credentials (used by app-wide DB container)
 SQLDB_PORT={{sqldb_port}}
 MYSQL_ROOT_USER={{sqldb_root}}
