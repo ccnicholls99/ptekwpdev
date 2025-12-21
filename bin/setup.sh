@@ -64,7 +64,7 @@ bootstrap_config() {
   fi
 
   # Ensure required app-level keys exist
-  local required_keys=(build_home project_base docker_network)
+  local required_keys=(build_home project_base network_name)
   for key in "${required_keys[@]}"; do
     if ! jq -e ".app.${key}" "$CONFIG_FILE" >/dev/null; then
       error "Missing required app-level key: $key"

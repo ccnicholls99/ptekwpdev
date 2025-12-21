@@ -182,6 +182,7 @@ parse_what_if() {
     *) return 1 ;;
   esac
 }
+
 run_or_preview() {
   local description="$1"; shift
   if [[ "$WHAT_IF" == true ]]; then
