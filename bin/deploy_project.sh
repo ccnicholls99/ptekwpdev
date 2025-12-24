@@ -12,9 +12,12 @@ CONFIG_FILE="$CONFIG_BASE/environments.json"
 WHAT_IF=false
 ACTION=""
 
+LOGFILE="$APP_BASE/logs/deploy_project.log"
+
 # Load helpers
 source "$APP_BASE/lib/output.sh"
 source "$APP_BASE/lib/helpers.sh"
+
 
 usage() {
   cat <<EOF
@@ -124,7 +127,7 @@ scaffold_directories() {
 
 generate_env_file() {
   ENV_FILE="$PROJECT_BASE/docker/.env"
-  TPL_ENV="$APP_BASE/config/docker/env.project.tpl"
+  TPL_ENV="$CONFIG_BASE/docker/env.project.tpl"
   ensure_dir "$(dirname "$ENV_FILE")"
 
   if $WHAT_IF; then
@@ -138,6 +141,10 @@ generate_env_file() {
   # Load project-specific values from environments.json
   project_json=$(jq -r --arg pr "$PROJECT" '.environments[$pr]' "$CONFIG_FILE")
 
+  local app_network
+  app_network=$(jq -r '.app.backend_network' "$CONFIG_FILE")
+
+
   # --------------------------------------------------------------------
   # Build derived values that are NOT stored in environments.json
   # --------------------------------------------------------------------
@@ -149,6 +156,7 @@ generate_env_file() {
     --arg project_base "$PROJECT_BASE" \
     --arg wordpress_image "$WORDPRESS_IMAGE" \
     --arg wordpress_ssl_port "$WORDPRESS_SSL_PORT" \
+    --arg backend_network "$app_network" \
     '{
       project_name: $project_name,
       project_domain: $project_domain,
@@ -156,7 +164,8 @@ generate_env_file() {
       build_home: $build_home,
       project_base: $project_base,
       wordpress_image: $wordpress_image,
-      wordpress_ssl_port: $wordpress_ssl_port
+      wordpress_ssl_port: $wordpress_ssl_port,
+      backend_network: $backend_network
     }'
   )
 
@@ -173,8 +182,8 @@ generate_env_file() {
   # --------------------------------------------------------------------
   for key in $(echo "$merged_json" | jq -r 'keys[]'); do
     [[ "$key" == "secrets" ]] && continue
-    val=$(echo "$merged_json" | jq -r ".${key}")
-    safe_val=$(printf '%s\n' "$val" | sed 's/[&/\]/\\&/g')
+    val=$(echo "$merged_json" | jq -c ".${key}")
+    safe_val=$(printf '%s\n' "$val" | sed 's/[&|\\]/\\&/g')
     sed -i "s|{{${key}}}|${safe_val}|g" "$ENV_FILE"
   done
 
@@ -184,8 +193,8 @@ generate_env_file() {
   secrets_json=$(echo "$project_json" | jq -r '.secrets // empty')
   if [[ -n "$secrets_json" && "$secrets_json" != "null" ]]; then
     for key in $(echo "$secrets_json" | jq -r 'keys[]'); do
-      val=$(echo "$secrets_json" | jq -r ".${key}")
-      safe_val=$(printf '%s\n' "$val" | sed 's/[&/\]/\\&/g')
+      val=$(echo "$secrets_json" | jq -c ".${key}")
+      safe_val=$(printf '%s\n' "$val" | sed 's/[&|\\]/\\&/g')
       info "Replacing {{${key}}} with [*****]"
       sed -i "s|{{${key}}}|${safe_val}|g" "$ENV_FILE"
     done

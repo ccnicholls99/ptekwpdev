@@ -17,9 +17,11 @@ set -euo pipefail
 # ---------------------------------------------------------
 
 APP_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Ensure log directory exists
+mkdir -p "$APP_BASE/logs"
 LOGFILE="$APP_BASE/logs/cleanup-project.log"
 
-source "$APP_BASE/lib/output.sh" "$@"
+source "$APP_BASE/lib/output.sh"
 source "$APP_BASE/lib/helpers.sh"
 
 log_header "Project Cleanup"
@@ -134,15 +136,15 @@ if [[ -z "$PROJECT_BASE" ]]; then
 fi
 
 # Read base_dir for this project
-BASE_DIR="$(jq -r ".environments[\"$PROJECT\"].base_dir // empty" "$ENV_FILE")"
+BASE_DIR="$(jq -r ".environments[\"$PROJECT_NAME\"].base_dir // empty" "$ENV_FILE")"
 
 if [[ -z "$BASE_DIR" ]]; then
-    error "Missing base_dir for project '$PROJECT' in $ENV_FILE"
+    error "Missing base_dir for project '$PROJECT_NAME' in $ENV_FILE"
     exit 1
 fi
 
 # Construct full project directory
-PROJECT_DIR="${PROJECT_BASE}${BASE_DIR}"
+PROJECT_DIR="${PROJECT_BASE%/}/${BASE_DIR#/}"
 info "Resolved project directory: $PROJECT_DIR"
 
 # ---------------------------------------------------------
@@ -166,8 +168,15 @@ info "Cleaning project: $PROJECT_NAME"
 COMPOSE_FILE="$APP_BASE/config/docker/compose.project.yml"
 if [[ -f "$COMPOSE_FILE" ]]; then
     run_or_preview "docker compose down for $PROJECT_NAME" \
-        docker compose -f "$COMPOSE_FILE" \
-        --project-name "$PROJECT_NAME" down --remove-orphans
+        bash -c "docker compose -f \"$COMPOSE_FILE\" \
+        --project-name \"$PROJECT_NAME\" down --remove-orphans || true"
+    #run_or_preview "docker compose down for $PROJECT_NAME" \
+    #    bash -c "docker compose -f \"$COMPOSE_FILE\" \
+    #    --project-name \"$PROJECT_NAME\" down --remove-orphans 2> >(grep -v 'Defaulting to a blank string' >&2)"
+
+    #run_or_preview "docker compose down for $PROJECT_NAME" \
+    #    docker compose -f "$COMPOSE_FILE" \
+    #    --project-name "$PROJECT_NAME" down --remove-orphans
 else
     warn "Project compose file not found: $COMPOSE_FILE"
 fi

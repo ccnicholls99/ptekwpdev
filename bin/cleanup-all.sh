@@ -18,14 +18,16 @@ set -euo pipefail
 # ---------------------------------------------------------
 
 APP_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Ensure log directory exists
+mkdir -p "$APP_BASE/logs"
 LOGFILE="$APP_BASE/logs/cleanup-all.log"
 
-source "$APP_BASE/lib/output.sh" "$@"
+source "$APP_BASE/lib/output.sh"
 source "$APP_BASE/lib/helpers.sh"
 
 log_header "Full Cleanup"
 
-echo "Script Args=$@"
+#echo "Script Args=$@"
 
 # ---------------------------------------------------------
 # WHAT-IF flag (pre-parse)
@@ -133,7 +135,7 @@ if (( ${#ENV_LIST[@]} > 0 )); then
             continue
         fi
 
-        PROJECT_DIR="$PROJECT_BASE$BASE_DIR"
+        PROJECT_DIR="${PROJECT_BASE%/}/${BASE_DIR#/}"
         echo "  - $env  (dir: $PROJECT_DIR)"
     done
 else
@@ -142,7 +144,7 @@ fi
 
 echo ""
 info "App-wide Docker assets:"
-echo "  - $APP_BASE/config/docker/compose.setup.yml"
+echo "  - $APP_BASE/config/docker/compose.app.yml"
 
 echo ""
 info "Configuration directory to be removed:"
@@ -166,26 +168,41 @@ fi
 # ---------------------------------------------------------
 # Step 1: Cleanup all projects
 # ---------------------------------------------------------
+# ---------------------------------------------------------
+# Step 1: Cleanup all projects
+# ---------------------------------------------------------
 if (( ${#ENV_LIST[@]} > 0 )); then
     info "Cleaning all deployed projects..."
 
     for env in "${ENV_LIST[@]}"; do
         info "Invoking cleanup-project.sh for: $env"
 
-        run_or_preview "cleanup project $env" \
-            "$APP_BASE/bin/cleanup-project.sh" -p "$env" \
-            --no-prompt ${WHAT_IF:+--what-if}
-
-        echo ""
+        if [[ "$WHAT_IF" == true ]]; then
+            # WHAT‑IF mode → explicitly pass -w
+            run_or_preview "cleanup project $env" \
+                "$APP_BASE/bin/cleanup-project.sh" \
+                -p "$env" \
+                --no-prompt \
+                --what-if
+        else
+            # Normal mode → do NOT pass -w
+            run_or_preview "cleanup project $env" \
+                "$APP_BASE/bin/cleanup-project.sh" \
+                -p "$env" \
+                --no-prompt
+        fi
+        echo "[DEBUG] Returned from cleanup-project.sh for: $env" >&2
     done
 else
     warn "No deployed environments found — skipping project cleanup."
 fi
 
+echo "[DEBUG] Reached after project loop in cleanup-all.sh" >&2
+
 # ---------------------------------------------------------
 # Step 2: App-wide Docker teardown
 # ---------------------------------------------------------
-APP_DOCKER="$APP_BASE/config/docker/compose.setup.yml"
+APP_DOCKER="$APP_BASE/config/docker/compose.app.yml"
 
 if [[ -f "$APP_DOCKER" ]]; then
     info "Tearing down app-wide Docker assets..."

@@ -5,12 +5,13 @@
 # Project identity
 PROJECT_NAME={{project_name}}
 PROJECT_DOMAIN={{project_domain}}
-PROJECT_TITLE="{{project_title}}"
+PROJECT_TITLE={{project_title}}
 PROJECT_BASE={{project_base}}
 BUILD_HOME={{build_home}}
 
 # Docker Network
 FRONTEND_NETWORK={{project_network}}
+BACKEND_NETWORK={{backend_network}}
 
 # SQL Database values
 SQLDB_IMAGE={{sqldb_image}}

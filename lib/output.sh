@@ -2,13 +2,27 @@
 # Unified logging functions for PtekWPDev
 # Prints to stdout (with colors) and appends to logfile
 
-# Require LOGFILE to be set by caller, else default to APP_BASE/logs/setup.log
+# --------------------------------------------------------------------
+# LOGFILE contract
+# --------------------------------------------------------------------
+# - Must be set by the caller BEFORE sourcing this file.
+# - Must be a path whose parent directory already exists.
+# - This file will NOT create default paths or directories.
+# - On violation, it prints an error to stderr and exits non-zero.
+# --------------------------------------------------------------------
+
+# Ensure LOGFILE is explicitly set
 if [[ -z "${LOGFILE:-}" ]]; then
-  if [[ -n "${APP_BASE:-}" ]]; then
-    LOGFILE="$APP_BASE/logs/setup.log"
-  else
-    LOGFILE="$HOME/.ptekwpdev/setup.log"
-  fi
+  echo "[ERROR] LOGFILE is not set. Set LOGFILE before sourcing output.sh." >&2
+  exit 1
+fi
+
+# Ensure the parent directory of LOGFILE exists
+LOGDIR="$(dirname "$LOGFILE")"
+if [[ ! -d "$LOGDIR" ]]; then
+  echo "[ERROR] LOGFILE directory does not exist: $LOGDIR" >&2
+  echo "[ERROR] Create the directory or adjust LOGFILE before sourcing output.sh." >&2
+  exit 1
 fi
 
 # ANSI color codes

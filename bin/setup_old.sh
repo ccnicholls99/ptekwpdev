@@ -45,41 +45,37 @@ ACTION=""
 
 bootstrap_config() {
   if $WHATIF; then
-    whatif "Would expand ${APP_BASE}/config/environments.tpl.json into ${CONFIG_FILE}"
-    whatif "Ensuring app-level keys: build_home, project_base, docker_network, sqldb_root, sqldb_root_pass" >> "$LOGFILE"
+    whatif "Would generate ${CONFIG_FILE} from ${TPL_FILE}"
+    whatif "Would replace __PROJECT_KEY__, {{project_name}}, {{project_title}}, {{project_description}}"
     return 0
   fi
 
   info "Bootstrapping environments.json..."
 
-  # If environments.json doesn't exist, create it from template
-  if [[ ! -f "$CONFIG_FILE" ]]; then
-    expand_env_file "$TPL_FILE" "$CONFIG_FILE"
-    success "Config file created at $CONFIG_FILE"
-  else
+  # Backup if exists
+  if [[ -f "$CONFIG_FILE" ]]; then
     warn "Config file already exists, creating backup before overwrite"
     backup_config "$CONFIG_FILE"
-    expand_env_file "$TPL_FILE" "$CONFIG_FILE"
-    success "Config file refreshed from template"
   fi
 
-  # Ensure required app-level keys exist
-  local required_keys=(build_home project_base network_name)
-  for key in "${required_keys[@]}"; do
-    if ! jq -e ".app.${key}" "$CONFIG_FILE" >/dev/null; then
-      error "Missing required app-level key: $key"
-      exit 1
-    fi
-  done
-  local required_secrets=(sqldb_root sqldb_root_pass)
-  for key in "${required_secrets[@]}"; do
-    if ! jq -e ".app.secrets.${key}" "$CONFIG_FILE" >/dev/null; then
-      error "Missing required app-level secret: $key"
-      exit 1
-    fi
-  done
+  # Copy template verbatim
+  cp "$TPL_FILE" "$CONFIG_FILE"
 
-  success "Config file bootstrapped with all required app-level keys"
+  # Replace project key placeholder
+  sed -i "s|__PROJECT_KEY__|$PROJECT_KEY|g" "$CONFIG_FILE"
+
+  # Replace top-level project metadata
+  sed -i "s|{{project_name}}|$PROJECT_NAME|g" "$CONFIG_FILE"
+  sed -i "s|{{project_title}}|$PROJECT_TITLE|g" "$CONFIG_FILE"
+  sed -i "s|{{project_description}}|$PROJECT_DESCRIPTION|g" "$CONFIG_FILE"
+
+  # Validate JSON
+  if ! jq empty "$CONFIG_FILE" >/dev/null 2>&1; then
+    error "Generated environments.json is invalid JSON"
+    exit 1
+  fi
+
+  success "Config file created at $CONFIG_FILE"
 }
 
 validate_config() {

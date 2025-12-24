@@ -29,5 +29,5 @@ volumes:
 
 networks:
   backend:
-    name: ${NETWORK_NAME}
+    name: ${BACKEND_NETWORK}
     driver: bridge

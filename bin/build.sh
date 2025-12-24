@@ -7,6 +7,9 @@
 # - Automation-ready with --no-prompt
 #
 
+echo "This script is obsolete. Please see deploy_app.sh and deploy_project.sh in the bin/ directory for updated deployment procedures."
+exit 0
+
 set -euo pipefail
 
 # -------------------------------
