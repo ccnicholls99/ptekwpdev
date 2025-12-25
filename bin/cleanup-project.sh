@@ -58,6 +58,43 @@ show_help() {
     printf "%s\n" ""
 }
 
+cleanup_containers() {
+    info "Stopping and removing containers for project: $PROJECT_NAME"
+
+    local containers
+    containers=$(docker ps -a --format '{{.Names}}' | grep "^${PROJECT_NAME}_" || true)
+
+    if [[ -z "$containers" ]]; then
+        info "No containers to remove"
+        return
+    fi
+
+    for c in $containers; do
+        if $WHAT_IF; then
+            whatif "Would remove container: $c"
+        else
+            docker rm -f "$c"
+            success "Removed container: $c"
+        fi
+    done
+}
+
+cleanup_networks() {
+    info "Removing networks for project: $PROJECT_NAME"
+
+    local networks
+    networks=$(docker network ls --format '{{.Name}}' | grep "^${PROJECT_NAME}_" || true)
+
+    for n in $networks; do
+        if $WHAT_IF; then
+            whatif "Would remove network: $n"
+        else
+            docker network rm "$n"
+            success "Removed network: $n"
+        fi
+    done
+}
+
 # Default to help if no args
 if (( $# == 0 )); then
     show_help
@@ -180,6 +217,10 @@ if [[ -f "$COMPOSE_FILE" ]]; then
 else
     warn "Project compose file not found: $COMPOSE_FILE"
 fi
+
+cleanup_containers
+cleanup_networks
+# cleanup_volumes ??
 
 # Remove project directory
 if [[ -n "$PROJECT_DIR" && -d "$PROJECT_DIR" ]]; then

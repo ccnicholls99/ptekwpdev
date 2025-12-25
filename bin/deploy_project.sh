@@ -281,7 +281,7 @@ deploy_docker_assets() {
 
 deploy_project_config() {
   # Proxy resources
-  PROXY_SRC="$APP_BASE/config/proxy"
+  PROXY_SRC="$CONFIG_BASE/config/proxy"
   PROXY_DST="$PROJECT_BASE/config/proxy"
 
   if [[ -d "$PROXY_SRC" ]]; then
@@ -387,6 +387,9 @@ init_project() {
 
       # Sync documentation files
       sync_docs
+
+      # Deploy Project Assets
+      "$APP_BASE/bin/generate_project_assets.sh" --project "$PROJECT"
 
       # Deploy theme code
       deploy_project_dev_sources

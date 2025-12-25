@@ -3,45 +3,44 @@
 # Prints to stdout (with colors) and appends to logfile
 
 # --------------------------------------------------------------------
-# LOGFILE contract
+# LOGFILE contract (updated)
 # --------------------------------------------------------------------
-# - Must be set by the caller BEFORE sourcing this file.
-# - Must be a path whose parent directory already exists.
-# - This file will NOT create default paths or directories.
-# - On violation, it prints an error to stderr and exits non-zero.
+# - PTEK_LOGFILE is optional.
+# - If unset, logging goes to /dev/null (safe for early bootstrap).
+# - If set, its parent directory MUST exist.
+# - This file will NOT create directories.
 # --------------------------------------------------------------------
 
-# Ensure LOGFILE is explicitly set
-if [[ -z "${LOGFILE:-}" ]]; then
-  echo "[ERROR] LOGFILE is not set. Set LOGFILE before sourcing output.sh." >&2
-  exit 1
-fi
+# Collision-proof logfile variable
+: "${PTEK_LOGFILE:=/dev/null}"
 
-# Ensure the parent directory of LOGFILE exists
-LOGDIR="$(dirname "$LOGFILE")"
-if [[ ! -d "$LOGDIR" ]]; then
-  echo "[ERROR] LOGFILE directory does not exist: $LOGDIR" >&2
-  echo "[ERROR] Create the directory or adjust LOGFILE before sourcing output.sh." >&2
-  exit 1
+# Validate directory only if not /dev/null
+if [[ "$PTEK_LOGFILE" != "/dev/null" ]]; then
+  LOGDIR="$(dirname "$PTEK_LOGFILE")"
+  if [[ ! -d "$LOGDIR" ]]; then
+    echo "[ERROR] PTEK_LOGFILE directory does not exist: $LOGDIR" >&2
+    echo "[ERROR] Create the directory or adjust PTEK_LOGFILE before sourcing output.sh." >&2
+    exit 1
+  fi
 fi
 
 # ANSI color codes
 COLOR_RESET="\033[0m"
-COLOR_INFO="\033[34m"     # Blue
-COLOR_SUCCESS="\033[32m"  # Green
-COLOR_WARN="\033[33m"     # Yellow
-COLOR_ERROR="\033[31m"    # Red
-COLOR_DEBUG="\033[35m"    # Magenta
-COLOR_WHATIF="\033[38;5;208m" # Orange (ANSI 256-color)
+COLOR_INFO="\033[34m"
+COLOR_SUCCESS="\033[32m"
+COLOR_WARN="\033[33m"
+COLOR_ERROR="\033[31m"
+COLOR_DEBUG="\033[35m"
+COLOR_WHATIF="\033[38;5;208m"
 
 # Default verbosity: normal (1)
-VERBOSE=1
+PTEK_VERBOSE=1
 
 # Parse CLI args for quiet/debug
 for arg in "$@"; do
   case "$arg" in
-    -q|--quiet) VERBOSE=0 ;;
-    --debug)    VERBOSE=2 ;;
+    -q|--quiet) PTEK_VERBOSE=0 ;;
+    --debug)    PTEK_VERBOSE=2 ;;
   esac
 done
 
@@ -51,14 +50,14 @@ timestamp() {
 
 log_header() {
   local process_name="$1"
-  local timestamp
-  timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+  local ts
+  ts="$(timestamp)"
 
-  echo "" >> "$LOGFILE"
-  echo "==================================================" >> "$LOGFILE"
-  echo ">>> START ${process_name} run at ${timestamp}" >> "$LOGFILE"
-  echo "==================================================" >> "$LOGFILE"
-  echo "" >> "$LOGFILE"
+  echo "" >> "$PTEK_LOGFILE"
+  echo "==================================================" >> "$PTEK_LOGFILE"
+  echo ">>> START ${process_name} run at ${ts}" >> "$PTEK_LOGFILE"
+  echo "==================================================" >> "$PTEK_LOGFILE"
+  echo "" >> "$PTEK_LOGFILE"
 }
 
 _log() {
@@ -68,18 +67,18 @@ _log() {
   local ts
   ts="$(timestamp)"
 
-  # Decide whether to print based on verbosity
+  # Verbosity rules
   case "$level" in
-    INFO|SUCCESS|WARN) [[ "$VERBOSE" -ge 1 ]] || return ;;
-    ERROR)             [[ "$VERBOSE" -ge 0 ]] || return ;;
-    DEBUG)             [[ "$VERBOSE" -ge 2 ]] || return ;;
+    INFO|SUCCESS|WARN) [[ "$PTEK_VERBOSE" -ge 1 ]] || return ;;
+    ERROR)             [[ "$PTEK_VERBOSE" -ge 0 ]] || return ;;
+    DEBUG)             [[ "$PTEK_VERBOSE" -ge 2 ]] || return ;;
   esac
 
-  # Print to stdout with color
+  # Print to stdout
   echo -e "${color}[${ts}] [${level}]${COLOR_RESET} $msg"
 
-  # Append to logfile without color codes
-  echo "[${ts}] [${level}] $msg" >> "$LOGFILE"
+  # Append to logfile (if not /dev/null)
+  echo "[${ts}] [${level}] $msg" >> "$PTEK_LOGFILE"
 }
 
 info()    { _log "INFO"    "$COLOR_INFO"    "$*"; }
@@ -88,3 +87,71 @@ warn()    { _log "WARN"    "$COLOR_WARN"    "$*"; }
 error()   { _log "ERROR"   "$COLOR_ERROR"   "$*"; }
 debug()   { _log "DEBUG"   "$COLOR_DEBUG"   "$*"; }
 whatif()  { _log "WHAT-IF" "$COLOR_WHATIF"  "$*"; }
+
+# Hard failure: log + exit
+abort() {
+  error "$*"
+  _log "FAIL" "$COLOR_ERROR" "Command terminated"
+  exit 1
+}
+
+set_log() {
+  local mode=""
+  local logfile=""
+  local header=""
+
+  # Parse flags
+  case "${1:-}" in
+    --append)
+      mode="append"
+      logfile="$2"
+      header="${3:-}"
+      ;;
+    --truncate)
+      mode="truncate"
+      logfile="$2"
+      header="${3:-}"
+      ;;
+    *)
+      error "set_log(): usage: set_log --append <file> [header] | set_log --truncate <file> [header]"
+      return 1
+      ;;
+  esac
+
+  if [[ -z "$logfile" ]]; then
+    error "set_log(): missing logfile argument"
+    return 1
+  fi
+
+  local logdir
+  logdir="$(dirname "$logfile")"
+
+  # Directory must exist
+  if [[ ! -d "$logdir" ]]; then
+    error "set_log(): directory does not exist: $logdir"
+    return 1
+  fi
+
+  # Test write permission
+  if ! touch "$logfile" 2>/dev/null; then
+    error "set_log(): cannot write to logfile: $logfile"
+    return 1
+  fi
+
+  # Handle truncate mode
+  if [[ "$mode" == "truncate" ]]; then
+    : > "$logfile" || {
+      error "set_log(): failed to truncate logfile: $logfile"
+      return 1
+    }
+  fi
+
+  # Update global logfile
+  PTEK_LOGFILE="$logfile"
+  success "Logfile set to: $PTEK_LOGFILE (mode: $mode)"
+
+  # Optional header
+  if [[ -n "$header" ]]; then
+    echo "$header" >> "$PTEK_LOGFILE"
+  fi
+}

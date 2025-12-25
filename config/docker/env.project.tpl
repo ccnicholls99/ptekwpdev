@@ -25,8 +25,9 @@ WORDPRESS_IMAGE={{wordpress_image}}
 WORDPRESS_ADMIN_USER={{wp_admin_user}}
 WORDPRESS_ADMIN_EMAIL={{wp_admin_email}}
 WORDPRESS_ADMIN_PASSWORD={{wp_admin_pass}}
-WORDPRESS_PORT={{wordpress_port}}
 WORDPRESS_HOST={{wordpress_host}}
+WORDPRESS_PORT={{wordpress_port}}
+WORDPRESS_SSL_PORT={{wordpress_ssl_port}}
 
 # Assorted Volumes (project-local)
 VOL_WORDPRESS_CORE=../wordpress
