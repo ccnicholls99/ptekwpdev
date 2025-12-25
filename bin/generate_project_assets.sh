@@ -147,8 +147,8 @@ generate_proxy_keys() {
 #
 copy_proxy_template() {
     ensure_dir "$PROJECT_BASE/config/proxy"
-    cp "$CONFIG_BASE/config/proxy/nginx.tpl.conf" \
-       "$PROJECT_BASE/config/proxy/nginx.tpl.conf"
+    cp "$CONFIG_BASE/config/proxy/default.conf.template" \
+       "$PROJECT_BASE/config/proxy/default.conf.template"
     success "Copied proxy template into project"
 }
 

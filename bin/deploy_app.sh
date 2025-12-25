@@ -155,7 +155,8 @@ deploy_proxy_templates() {
   info "Deploying proxy templates to $DST"
 
   local assets=(
-    "nginx.conf.tpl"
+    #"nginx.conf.tpl",
+    "default.conf.template"
   )
 
   for file in "${assets[@]}"; do

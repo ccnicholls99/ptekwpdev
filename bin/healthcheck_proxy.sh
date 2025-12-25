@@ -120,7 +120,7 @@ info "Validating Nginx configuration syntax..."
 
 docker exec "$CONTAINER" nginx -t >/dev/null 2>&1 \
     && success "Nginx configuration syntax is valid" \
-    || fail "Nginx configuration syntax is INVALID"
+    || abort "Nginx configuration syntax is INVALID"
 
 # ---------------------------------------------------------
 # 3. Check Nginx listening ports
@@ -142,16 +142,16 @@ info "Testing HTTPS handshake..."
 
 docker exec "$CONTAINER" curl -skI "https://localhost" >/dev/null \
     && success "HTTPS handshake successful" \
-    || fail "HTTPS handshake FAILED"
+    || abort "HTTPS handshake FAILED"
 
 # ---------------------------------------------------------
 # 5. Test upstream WordPress connectivity
 # ---------------------------------------------------------
 info "Testing upstream WordPress connectivity..."
 
-docker exec "$CONTAINER" curl -s "http://${WORDPRESS_URL}" >/dev/null \
-    && success "Proxy can reach WordPress upstream (${WORDPRESS_URL})" \
-    || fail "Proxy CANNOT reach WordPress upstream"
+docker exec "$CONTAINER" curl -s "http://${WORDPRESS_HOST}:${WORDPRESS_PORT}" >/dev/null \
+    && success "Proxy can reach WordPress upstream (${WORDPRESS_HOST}:${WORDPRESS_PORT})" \
+    || abort "Proxy CANNOT reach WordPress upstream"
 
 # ---------------------------------------------------------
 # Final summary
