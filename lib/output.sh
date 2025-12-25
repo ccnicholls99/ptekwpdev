@@ -33,16 +33,9 @@ COLOR_ERROR="\033[31m"
 COLOR_DEBUG="\033[35m"
 COLOR_WHATIF="\033[38;5;208m"
 
-# Default verbosity: normal (1)
-PTEK_VERBOSE=1
-
-# Parse CLI args for quiet/debug
-for arg in "$@"; do
-  case "$arg" in
-    -q|--quiet) PTEK_VERBOSE=0 ;;
-    --debug)    PTEK_VERBOSE=2 ;;
-  esac
-done
+# Default verbosity: normal (1), if not specified
+# PTEK_VERBOSE=1
+: "${PTEK_VERBOSE:=1}"
 
 timestamp() {
   date +"%Y-%m-%d %H:%M:%S"
@@ -100,7 +93,6 @@ set_log() {
   local logfile=""
   local header=""
 
-  # Parse flags
   case "${1:-}" in
     --append)
       mode="append"
@@ -126,31 +118,27 @@ set_log() {
   local logdir
   logdir="$(dirname "$logfile")"
 
-  # Directory must exist
   if [[ ! -d "$logdir" ]]; then
     error "set_log(): directory does not exist: $logdir"
     return 1
   fi
 
-  # Test write permission
   if ! touch "$logfile" 2>/dev/null; then
     error "set_log(): cannot write to logfile: $logfile"
     return 1
   fi
 
-  # Handle truncate mode
   if [[ "$mode" == "truncate" ]]; then
-    : > "$logfile" || {
-      error "set_log(): failed to truncate logfile: $logfile"
-      return 1
-    }
+    : > "$logfile"
   fi
 
-  # Update global logfile
   PTEK_LOGFILE="$logfile"
-  success "Logfile set to: $PTEK_LOGFILE (mode: $mode)"
 
-  # Optional header
+  # Only print success if verbose mode is enabled
+  if [[ "${PTEK_VERBOSE:-1}" -ge 1 ]]; then
+    success "Logfile set to: $PTEK_LOGFILE (mode: $mode)"
+  fi
+
   if [[ -n "$header" ]]; then
     echo "$header" >> "$PTEK_LOGFILE"
   fi

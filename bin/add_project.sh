@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+# ================================================================================
+# PTEKWPDEV — a multi-project, bootstrap app for localized WordPress development
+# github: https://github.com/ccnicholls99/ptekwpdev.git
+# ------------------------------------------------------------------------------
+# Script: project_add.sh
+#
+# Description:
+#   Declares a new project for provisioning under the ptekwpdev environment
+#
+# Notes:
+#   - The new project will be configured in CONFIG_BASE/environments.json
+#   - Update the project config and secrets as needed
+#   - Deploy using bin/project_deploy.sh
+#
+# ================================================================================
 set -euo pipefail
 
 APP_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
