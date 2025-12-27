@@ -1,3 +1,5 @@
+app/config/app.env
+
 doc/cp_*
 */**/.env
 

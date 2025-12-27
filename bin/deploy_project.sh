@@ -341,8 +341,31 @@ sync_docs() {
   done
 }
 
+# ------------------------------------------------------------
+# Step: Provision WordPress core
+# ------------------------------------------------------------
+deploy_wordpress_core() {
+  info "Provisioning WordPress core for project: $PROJECT_KEY"
+
+  WP_SCRIPT="${APP_BASE}/bin/deploy_wordpress.sh"
+
+  if [[ ! -x "$WP_SCRIPT" ]]; then
+    error "WordPress provisioning script not found or not executable: $WP_SCRIPT"
+    exit 1
+  fi
+
+  WP_WHAT_IF=""
+  $WHAT_IF && WP_WHAT_IF="--what-if"
+
+  run_or_preview "Running WordPress provisioning script" \
+    "$WP_SCRIPT" --project "$PROJECT_KEY" $WP_WHAT_IF
+
+  success "WordPress core provisioning complete"  
+}
+
+#
 # === Deploy dev sources (themes/plugins) for the current project ===
-# === Deploy dev sources (themes/plugins) for the current project ===
+#
 deploy_project_dev_sources() {
   local project_key="$PROJECT"
 
@@ -376,23 +399,28 @@ deploy_project_dev_sources() {
   done
 }
 
+
 init_project() {
- 
-      scaffold_directories
-      deploy_project_config
-      generate_env_file
-      deploy_docker_assets
-      # Ensure required binaries are available
-      check_binary docker git jq
 
-      # Sync documentation files
-      sync_docs
+  # Ensure required binaries are available
+  check_binary docker git jq
 
-      # Deploy Project Assets
-      "$APP_BASE/bin/generate_project_assets.sh" --project "$PROJECT"
+  scaffold_directories
+  deploy_project_config
+  generate_env_file
+  deploy_docker_assets
 
-      # Deploy theme code
-      deploy_project_dev_sources
+  # Sync documentation files
+  sync_docs
+
+  # Deploy Project Assets
+  "$APP_BASE/bin/generate_project_assets.sh" --project "$PROJECT"
+
+  # Deploy WordPress core
+  deploy_wordpress_core
+
+  # Deploy theme code
+  deploy_project_dev_sources
 }
 
 # Exxplicit UP action
