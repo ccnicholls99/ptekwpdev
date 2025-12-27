@@ -2,6 +2,26 @@
 # ==============================================================================
 #  PTEKWPDEV — Add Asset to Shared Assets Container
 #  Script: assets_add.sh
+#  Synopsis:
+#    Add a plugin or theme (ZIP file) into the versioned assets repository
+#    inside the ptekwpdev_assets container.
+#
+#  Description:
+#    This script copies a ZIP file representing a plugin or theme into the
+#    versioned assets directory inside the shared assets container. It ensures
+#    the container is running, validates the source file, and performs a
+#    deterministic copy.
+#
+#  Usage:
+#    assets_add.sh plugin <slug> <version> <file.zip>
+#    assets_add.sh theme  <slug> <version> <file.zip>
+#
+#  Notes:
+#    - Source MUST be a direct file path (ZIP file)
+#    - Must be executed from PTEK_APP_BASE/bin
+#    - Uses in-memory config dictionary PTEKWPCFG
+#    - Uses appcfg() helper for config access
+#    - Uses Option C logging
 # ==============================================================================
 
 set -o errexit
@@ -13,7 +33,9 @@ set -o pipefail
 # ------------------------------------------------------------------------------
 
 PTEK_CALLER_PWD="$(pwd)"
-ptekwp_cleanup() { cd "$PTEK_CALLER_PWD"; }
+ptekwp_cleanup() {
+  cd "$PTEK_CALLER_PWD" || true
+}
 trap ptekwp_cleanup EXIT
 
 # ------------------------------------------------------------------------------
@@ -23,19 +45,19 @@ trap ptekwp_cleanup EXIT
 # shellcheck source=/dev/null
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/app_config.sh"
 
-set_log --truncate "${PTEK_APP_LOG_DIR}/assets_add.log" \
+# Major script → initialize its own logfile
+set_log --truncate "$(appcfg app_log_dir)/assets_add.log" \
   "=== Assets Add Run ($(date)) ==="
 
 # ------------------------------------------------------------------------------
-# Constants
+# Resolve config values
 # ------------------------------------------------------------------------------
 
-ASSETS_CONTAINER="ptekwpdev_assets"
-ASSETS_DOCKER_DIR="${PTEK_APP_ASSETS}/docker"
-ASSETS_COMPOSE_FILE="${ASSETS_DOCKER_DIR}/compose.assets.yml"
+ASSETS_CONTAINER="$(appcfg assets_container)"
+ASSETS_ROOT="$(appcfg assets_root)"
 
-# Correct internal path for assets
-ASSETS_ROOT="/usr/src/ptekwpdev/assets"
+ASSETS_DOCKER_DIR="$(appcfg app_assets_dir)/docker"
+ASSETS_COMPOSE_FILE="${ASSETS_DOCKER_DIR}/compose.assets.yml"
 
 # ------------------------------------------------------------------------------
 # Usage
@@ -46,6 +68,10 @@ usage() {
 Usage:
   assets_add.sh plugin <slug> <version> <file.zip>
   assets_add.sh theme  <slug> <version> <file.zip>
+
+Examples:
+  assets_add.sh plugin breakdance 2.5.2 /path/to/breakdance-2.5.2.zip
+  assets_add.sh theme twentytwentyfive 1.0 /path/to/theme.zip
 EOF
 }
 

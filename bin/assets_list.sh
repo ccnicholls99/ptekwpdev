@@ -3,22 +3,18 @@
 #  PTEKWPDEV — List Assets in Shared Assets Container
 #  Script: assets_list.sh
 #  Synopsis:
-#    List versioned plugins and themes stored inside the ptekwpdev_assets
-#    container.
+#    List versioned plugins and themes stored inside the shared assets container.
 #
 #  Description:
 #    This script ensures the assets container is running and then lists all
-#    versioned assets under /usr/src/ptekwpdev/assets inside the container.
-#    Output is human-readable and deterministic.
-#
-#  Usage:
-#    assets_list.sh
+#    versioned assets under the configured assets root path inside the container.
+#    Output is deterministic and contributor-safe.
 #
 #  Notes:
 #    - Must be executed from PTEK_APP_BASE/bin
-#    - All environment variables are PTEK_-namespaced
-#    - Logging utilities come from lib/output.sh
-#    - Caller directory is always restored on exit
+#    - Uses in-memory config dictionary PTEKWPCFG
+#    - Uses appcfg() helper for config access
+#    - Uses Option C logging
 # ==============================================================================
 
 set -o errexit
@@ -30,7 +26,9 @@ set -o pipefail
 # ------------------------------------------------------------------------------
 
 PTEK_CALLER_PWD="$(pwd)"
-ptekwp_cleanup() { cd "$PTEK_CALLER_PWD"; }
+ptekwp_cleanup() {
+  cd "$PTEK_CALLER_PWD" || true
+}
 trap ptekwp_cleanup EXIT
 
 # ------------------------------------------------------------------------------
@@ -41,19 +39,18 @@ trap ptekwp_cleanup EXIT
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/app_config.sh"
 
 # Major script → initialize its own logfile
-set_log --truncate "${PTEK_APP_LOG_DIR}/assets_list.log" \
+set_log --truncate "$(appcfg app_log_dir)/assets_list.log" \
   "=== Assets List Run ($(date)) ==="
 
 # ------------------------------------------------------------------------------
-# Constants
+# Resolve config values
 # ------------------------------------------------------------------------------
 
-ASSETS_CONTAINER="ptekwpdev_assets"
-ASSETS_DOCKER_DIR="${PTEK_APP_ASSETS}/docker"
-ASSETS_COMPOSE_FILE="${ASSETS_DOCKER_DIR}/compose.assets.yml"
+ASSETS_CONTAINER="$(appcfg assets_container)"
+ASSETS_ROOT="$(appcfg assets_root)"
 
-# Correct internal path for assets
-ASSETS_ROOT="/usr/src/ptekwpdev/assets"
+ASSETS_DOCKER_DIR="$(appcfg app_assets_dir)/docker"
+ASSETS_COMPOSE_FILE="${ASSETS_DOCKER_DIR}/compose.assets.yml"
 
 # ------------------------------------------------------------------------------
 # Helpers
@@ -72,7 +69,7 @@ list_assets() {
   docker exec "${ASSETS_CONTAINER}" sh -c "
     echo 'Plugins:'
     if [ -d ${ASSETS_ROOT}/plugins ]; then
-      find ${ASSETS_ROOT}/plugins -mindepth 3 -maxdepth 3 -type d \
+      find ${ASSETS_ROOT}/plugins -mindepth 2 -maxdepth 2 -type d \
         | sed 's|${ASSETS_ROOT}/plugins/||'
     else
       echo '  (none)'
@@ -81,7 +78,7 @@ list_assets() {
     echo ''
     echo 'Themes:'
     if [ -d ${ASSETS_ROOT}/themes ]; then
-      find ${ASSETS_ROOT}/themes -mindepth 3 -maxdepth 3 -type d \
+      find ${ASSETS_ROOT}/themes -mindepth 2 -maxdepth 2 -type d \
         | sed 's|${ASSETS_ROOT}/themes/||'
     else
       echo '  (none)'
