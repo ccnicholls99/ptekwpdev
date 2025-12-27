@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#  PTEKWPDEV — Bootstrap initializer for the app-level environment
+#  PTEKWPDEV — App Bootstrap Script
 #  Script: app_bootstrap.sh
+#  Synopsis:
+#    Establish the app-level configuration directory and generate app.json,
+#    which contains all static app-level settings and secrets.
 #
 #  Description:
-#    First-run initializer executed immediately after git clone.
-#    Establishes PTEK_APP_BASE, PTEK_CONFIG_BASE, PTEK_PROJECT_BASE and writes
-#    app/config/ptekwpdev.json as the static app-level configuration file.
+#    This script initializes the PTEKWPDEV application environment by creating
+#    CONFIG_BASE, generating app.json with static configuration values, and
+#    preparing the directory structure for runtime configuration files.
 #
-#  Contract:
-#    - Never destructive without explicit confirmation
-#    - Never touches project-level config
-#    - Never launches Docker or WordPress
-#    - Always restores caller's working directory
+#    It does NOT:
+#      - generate environments.json
+#      - deploy Docker templates
+#      - start containers
+#
+#    It is a pure initializer and must be run once after git clone.
 # ==============================================================================
 
 set -o errexit
@@ -24,187 +28,119 @@ set -o pipefail
 # ------------------------------------------------------------------------------
 
 PTEK_CALLER_PWD="$(pwd)"
-ptekwp_cleanup() { cd "$PTEK_CALLER_PWD"; }
+ptekwp_cleanup() {
+  cd "$PTEK_CALLER_PWD" || true
+}
 trap ptekwp_cleanup EXIT
 
 # ------------------------------------------------------------------------------
-# Resolve PTEK_APP_BASE (scripts always run from APP_BASE/bin)
+# Resolve APP_BASE
 # ------------------------------------------------------------------------------
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PTEK_APP_BASE="$(cd "${SCRIPT_DIR}/.." && pwd)"
-PTEK_APP_KEY="$(basename "$PTEK_APP_BASE")"
+APP_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # ------------------------------------------------------------------------------
-# Defaults
+# Load logging utilities
 # ------------------------------------------------------------------------------
 
-NO_PROMPT=false
-OVERWRITE=false
+# shellcheck source=/dev/null
+source "${APP_BASE}/lib/output.sh"
 
-DEFAULT_PTEK_CONFIG_BASE="${HOME}/.${PTEK_APP_KEY}"
-DEFAULT_PTEK_PROJECT_BASE="${HOME}/${PTEK_APP_KEY}/projects"
+LOG_DIR="${APP_BASE}/app/logs"
+mkdir -p "${LOG_DIR}"
 
-PTEK_CONFIG_BASE=""
-PTEK_PROJECT_BASE=""
+set_log --truncate "${LOG_DIR}/app_bootstrap.log" \
+  "=== App Bootstrap Run ($(date)) ==="
 
 # ------------------------------------------------------------------------------
-# Usage
+# Determine CONFIG_BASE and PROJECT_BASE
 # ------------------------------------------------------------------------------
 
-usage() {
-  cat <<EOF
-Usage: $(basename "$0") [options]
+CONFIG_BASE="${HOME}/.ptekwpdev"
+PROJECT_BASE="${HOME}/projects"
 
-Options:
-  -n, --no-prompt         Run non-interactively using defaults or provided args
-  --overwrite             Allow overwrite in --no-prompt mode
-  --config-base PATH      Override PTEK_CONFIG_BASE
-  --project-base PATH     Override PTEK_PROJECT_BASE
-  -h, --help              Show this help message
+mkdir -p "${CONFIG_BASE}"
+mkdir -p "${PROJECT_BASE}"
 
-Defaults:
-  PTEK_APP_BASE     = ${PTEK_APP_BASE}
-  PTEK_CONFIG_BASE  = ${DEFAULT_PTEK_CONFIG_BASE}
-  PTEK_PROJECT_BASE = ${DEFAULT_PTEK_PROJECT_BASE}
-EOF
+info "APP_BASE:     ${APP_BASE}"
+info "CONFIG_BASE:  ${CONFIG_BASE}"
+info "PROJECT_BASE: ${PROJECT_BASE}"
+
+# ------------------------------------------------------------------------------
+# Generate secrets
+# ------------------------------------------------------------------------------
+
+generate_secret() {
+  head -c 64 /dev/urandom | tr -dc 'A-Za-z0-9' | head -c 32
 }
 
-# ------------------------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------------------------
-
-prompt() {
-  local var_name="$1"
-  local prompt_text="$2"
-  local default_value="$3"
-
-  local value=""
-  read -rp "${prompt_text} [${default_value}]: " value
-  value="${value:-$default_value}"
-
-  printf -v "$var_name" '%s' "$value"
-}
-
-normalize_path() {
-  local path="$1"
-  mkdir -p "$path"
-  (
-    cd "$path"
-    pwd
-  )
-}
+SQDB_ROOT_PASS="$(generate_secret)"
+SQDB_ROOT_USER="root"
 
 # ------------------------------------------------------------------------------
-# Argument parsing
+# Generate app.json in CONFIG_BASE
 # ------------------------------------------------------------------------------
 
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    -n|--no-prompt)
-      NO_PROMPT=true
-      ;;
-    --overwrite)
-      OVERWRITE=true
-      ;;
-    --config-base)
-      shift
-      PTEK_CONFIG_BASE="$1"
-      ;;
-    --project-base)
-      shift
-      PTEK_PROJECT_BASE="$1"
-      ;;
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    *)
-      echo "Unknown argument: $1" >&2
-      usage
-      exit 1
-      ;;
-  esac
-  shift
-done
+APP_JSON="${CONFIG_BASE}/app.json"
 
-# ------------------------------------------------------------------------------
-# Interactive or script-mode value resolution
-# ------------------------------------------------------------------------------
+info "Generating app.json → ${APP_JSON}"
 
-if [[ "$NO_PROMPT" == false ]]; then
-  echo "Bootstrapping ${PTEK_APP_KEY} in interactive mode."
-  echo "PTEK_APP_BASE detected as: ${PTEK_APP_BASE}"
-  echo
-
-  prompt PTEK_CONFIG_BASE  "Enter PTEK_CONFIG_BASE"  "${DEFAULT_PTEK_CONFIG_BASE}"
-  prompt PTEK_PROJECT_BASE "Enter PTEK_PROJECT_BASE" "${DEFAULT_PTEK_PROJECT_BASE}"
-else
-  echo "Bootstrapping ${PTEK_APP_KEY} in script mode (--no-prompt)."
-
-  PTEK_CONFIG_BASE="${PTEK_CONFIG_BASE:-$DEFAULT_PTEK_CONFIG_BASE}"
-  PTEK_PROJECT_BASE="${PTEK_PROJECT_BASE:-$DEFAULT_PTEK_PROJECT_BASE}"
-fi
-
-# ------------------------------------------------------------------------------
-# Normalize paths (safe, does not change caller directory)
-# ------------------------------------------------------------------------------
-
-PTEK_CONFIG_BASE="$(normalize_path "$PTEK_CONFIG_BASE")"
-PTEK_PROJECT_BASE="$(normalize_path "$PTEK_PROJECT_BASE")"
-
-# ------------------------------------------------------------------------------
-# Prepare directories
-# ------------------------------------------------------------------------------
-
-PTEK_APP_CONFIG_DIR="${PTEK_APP_BASE}/app/config"
-mkdir -p "$PTEK_APP_CONFIG_DIR"
-
-APP_JSON_FILE="${PTEK_APP_CONFIG_DIR}/${PTEK_APP_KEY}.json"
-
-# ------------------------------------------------------------------------------
-# Handle existing config file
-# ------------------------------------------------------------------------------
-
-if [[ -f "$APP_JSON_FILE" ]]; then
-  if [[ "$NO_PROMPT" == false ]]; then
-    echo "Config file already exists:"
-    echo "  $APP_JSON_FILE"
-    read -rp "Overwrite? (y/N): " answer
-    answer="${answer,,}"
-    if [[ "$answer" != "y" && "$answer" != "yes" ]]; then
-      echo "Aborting. Existing config preserved."
-      exit 0
-    fi
-  else
-    if [[ "$OVERWRITE" != true ]]; then
-      echo "ERROR: Config file exists and --overwrite not provided:"
-      echo "  $APP_JSON_FILE"
-      echo "Use: --overwrite   (only valid with --no-prompt)"
-      exit 1
-    fi
-  fi
-fi
-
-# ------------------------------------------------------------------------------
-# Write minimal ptekwpdev.json
-# ------------------------------------------------------------------------------
-
-cat > "$APP_JSON_FILE" <<EOF
+cat > "${APP_JSON}" <<EOF
 {
-  "APP_KEY": "${PTEK_APP_KEY}",
-  "APP_BASE": "${PTEK_APP_BASE}",
-  "CONFIG_BASE": "${PTEK_CONFIG_BASE}",
-  "PROJECT_BASE": "${PTEK_PROJECT_BASE}",
+  "APP_KEY": "ptekwpdev",
+  "APP_BASE": "${APP_BASE}",
+  "CONFIG_BASE": "${CONFIG_BASE}",
+  "PROJECT_BASE": "${PROJECT_BASE}",
+
+  "backend_network": "ptekwpdev_backend",
+
+  "secrets": {
+    "sqldb_root": "${SQDB_ROOT_USER}",
+    "sqldb_root_pass": "${SQDB_ROOT_PASS}"
+  },
+
   "assets": {
     "container": "ptekwpdev_assets",
     "root_path": "/usr/src/ptekwpdev/assets"
+  },
+
+  "wordpress_defaults": {
+    "image": "wordpress:latest",
+    "php_version": "8.2",
+    "port": 8080,
+    "ssl_port": 8443
   }
 }
 EOF
 
+success "app.json created at ${APP_JSON}"
+
 # ------------------------------------------------------------------------------
-# Summary
+# Validate JSON
 # ------------------------------------------------------------------------------
-echo
-echo "Bootstrap complete. App configuration written to: ${APP_JSON_FILE}"
+
+if ! jq empty "${APP_JSON}" >/dev/null 2>&1; then
+  error "Generated app.json is invalid JSON"
+  exit 1
+fi
+
+success "app.json validated"
+
+# ------------------------------------------------------------------------------
+# Prepare CONFIG_BASE directory structure
+# ------------------------------------------------------------------------------
+
+info "Preparing CONFIG_BASE directory structure"
+
+mkdir -p "${CONFIG_BASE}/docker"
+mkdir -p "${CONFIG_BASE}/config/proxy"
+mkdir -p "${CONFIG_BASE}/config/wordpress"
+mkdir -p "${CONFIG_BASE}/config/php"
+
+success "CONFIG_BASE initialized"
+
+# ------------------------------------------------------------------------------
+# Done
+# ------------------------------------------------------------------------------
+
+success "App bootstrap complete."
