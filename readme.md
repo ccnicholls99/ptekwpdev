@@ -164,8 +164,8 @@ flowchart TD
     %% GLOBAL CONFIG (APP LEVEL)
     %% ============================
 
-    A1[app.json\napp_base, config_base, project_base\nbackend_network, database, wordpress_defaults]
-    A2[app_config.sh\n(appcfg accessor)]
+    A1[app.json\napp_base config_base project_base\nbackend_network database wordpress_defaults]
+    A2[app_config.sh\nappcfg accessor]
     A3[app_deploy.sh\nGlobal provisioning]
 
     A1 --> A2 --> A3
@@ -180,11 +180,11 @@ flowchart TD
     %% PROJECT CONFIG (PER PROJECT)
     %% ============================
 
-    B1[environments.json\nprojects.{key}\nproject_domain, project_network, base_dir\nwordpress.*, secrets.*, dev_sources.*]
+    B1[environments.json\nprojects key\nproject_domain project_network base_dir\nwordpress secrets dev_sources]
     B2[project_deploy.sh]
-    B3[derived_json\n(lowercase merged config)]
+    B3[derived_json\nlowercase merged config]
     B4[env.project.tpl]
-    B5[.env (project env vars)]
+    B5[.env project env vars]
 
     B1 --> B2 --> B3 --> B4 --> B5
 
@@ -199,8 +199,8 @@ flowchart TD
     C1 --> C3[wpcli container]
     C1 --> C4[proxy container\nNGINX]
 
-    C1 --> C5[frontend network\nname=${FRONTEND_NETWORK}]
-    C1 --> C6[backend network\nname=${BACKEND_NETWORK}]
+    C1 --> C5[frontend network\nname FRONTEND_NETWORK]
+    C1 --> C6[backend network\nname BACKEND_NETWORK]
 
     C2 --> C6
     C3 --> C6
@@ -222,8 +222,8 @@ flowchart TD
 
 
     %% ============================
-    %% DEV SOURCES + ASSETS
+    %% DEV SOURCES AND ASSETS
     %% ============================
 
-    B2 --> D1[dev_sources deployment\nplugins/themes]
+    B2 --> D1[dev_sources deployment\nplugins themes]
     C2 --> D2[Assets Volume\nptekwpdev_assets_volume]
