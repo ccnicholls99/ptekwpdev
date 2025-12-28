@@ -1,19 +1,28 @@
 #!/usr/bin/env bash
-# ================================================================================
-# PTEKWPDEV — a multi-project, bootstrap app for localized WordPress development
-# github: https://github.com/ccnicholls99/ptekwpdev.git
-# ------------------------------------------------------------------------------
-# Script: {{script_name}}
-# Synopsis:
-#   {{synopsis}}
+# ==============================================================================
+#  PTEKWPDEV — Project Deployment Orchestrator
+#  Script: project_deploy.sh
+#  Location: APP_BASE/bin/project_deploy.sh
 #
-# Description:
-#   {{script_description}}
+#  Description:
+#    Canonical orchestrator for project-level deployment actions.
+#    Supports deploy, start, stop, and restart operations for a single project.
 #
-# Notes:
-#   {{optional_notes}}
+#    This script loads:
+#      - app-level configuration (app_config.sh)
+#      - project-level configuration (project_config.sh)
 #
-# ================================================================================
+#    It operates on the generated project config file:
+#      CONFIG_BASE/config/projects.json
+#
+#  Contract:
+#    - Must be executed, not sourced
+#    - Never modifies caller's working directory
+#    - Never exports environment variables
+#    - Never leaks config outside this process
+#    - Fails loudly if bootstrap or app_deploy has not been run
+# ==============================================================================
+
 set -euo pipefail
 
 APP_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -21,7 +30,9 @@ PROJECT=""
 WHAT_IF=false
 ACTION=""
 
+# ==============================================================================
 # Load app-level configuration
+# ==============================================================================
 APP_CONFIG="$APP_BASE/lib/app_config.sh"
 if [[ ! -f "$APP_CONFIG" ]]; then
   echo "ERROR: Missing app_config.sh at $APP_CONFIG"
@@ -31,9 +42,8 @@ fi
 # shellcheck source=/dev/null
 source "$APP_CONFIG"
 
-# Now that app_config is loaded:
 CONFIG_BASE="$(appcfg config_base)"
-CONFIG_FILE="$CONFIG_BASE/environments.json"
+PROJECTS_FILE="$CONFIG_BASE/config/projects.json"
 
 LOGFILE="$APP_BASE/logs/project_deploy.log"
 
@@ -41,492 +51,264 @@ LOGFILE="$APP_BASE/logs/project_deploy.log"
 source "$APP_BASE/lib/output.sh"
 source "$APP_BASE/lib/helpers.sh"
 
+# Load project-level config loader
+PROJECT_CONFIG="$APP_BASE/lib/project_config.sh"
+if [[ ! -f "$PROJECT_CONFIG" ]]; then
+  error "Missing project_config.sh at $PROJECT_CONFIG"
+  exit 1
+fi
 
+# shellcheck source=/dev/null
+source "$PROJECT_CONFIG"
+
+# ==============================================================================
+# Argument Parsing
+# ==============================================================================
 usage() {
   cat <<EOF
-Usage: $(basename "$0") -p NAME -a {init|up|down|reset} [-w|--what-if]
+Usage: $(basename "$0") [options]
 
 Options:
-  -p, --project NAME   REQUIRED project key
-  -a, --action ACTION  REQUIRED action:
-                         init   → Initialize project (.env, compose.project.yml)
-                         up     → Start project containers
-                         down   → Stop project containers
-                         reset  → Tear down and re-initialize project
-  -w, --what-if        Dry-run mode: show what would be done without executing
-  -h, --help           Show this help message
+  -p, --project <key>     Project key to deploy (required)
+  -a, --action <action>   Action: deploy | start | stop | restart
+  -w, --what-if           Dry-run mode (no changes made)
+  -h, --help              Show this help message
 
-Example:
-  $(basename "$0") --project demo --action init
+Examples:
+  $(basename "$0") --project demo --action deploy
+  $(basename "$0") -p demo -a start
 EOF
 }
 
-parse_options() {
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      -p|--project)
-        if [[ $# -lt 2 ]]; then
-          error "Missing value for $1"
-          usage
-          exit 1
-        fi
-        PROJECT="$2"
-        shift 2
-        ;;
-      -a|--action)
-        if [[ $# -lt 2 ]]; then
-          error "Missing value for $1"
-          usage
-          exit 1
-        fi
-        ACTION="$2"
-        shift 2
-        ;;
-      -w|--what-if)
-        WHAT_IF=true
-        shift
-        ;;
-      -h|--help)
-        usage
-        exit 0
-        ;;
-      *)
-        error "Unknown option: $1"
-        usage
-        exit 1
-        ;;
-    esac
-  done
-
-  if [[ -z "$PROJECT" ]]; then
-    error "--project is required"
-    usage
-    exit 1
-  fi
-
-  if [[ -z "$ACTION" ]]; then
-    error "--action is required"
-    usage
-    exit 1
-  fi
-}
-
-resolve_project() {
-  [[ ! -f "$CONFIG_FILE" ]] && { error "No project config at $CONFIG_FILE"; exit 1; }
-
-  PROJECT_CONFIG=$(jq -r --arg pr "$PROJECT" '.projects[$pr]' "$CONFIG_FILE")
-
-  HOST_DOMAIN=$(echo "$PROJECT_CONFIG" | jq -r '.project_domain')
-  BASE_DIR_REL=$(echo "$PROJECT_CONFIG" | jq -r '.base_dir' | sed 's|^/||')
-
-  APP_PROJECT_BASE="$(appcfg project_base)"
-  PROJECT_BASE="$APP_PROJECT_BASE/$BASE_DIR_REL"
-
-  WORDPRESS_IMAGE=$(echo "$PROJECT_CONFIG" | jq -r '.wordpress.image')
-  WORDPRESS_SSL_PORT=$(echo "$PROJECT_CONFIG" | jq -r '.wordpress.ssl_port')
-
-  LOG_DIR="$PROJECT_BASE/app/logs"
-  ensure_dir "$LOG_DIR"
-  LOGFILE="$LOG_DIR/project_deploy.log"
-  export LOGFILE
-  log_header "Provision: $PROJECT"
-
-  info "Resolved project: $PROJECT_BASE (domain=$HOST_DOMAIN)"
-}
-
-scaffold_directories() {
-  if $WHAT_IF; then
-    whatif "Would scaffold under $PROJECT_BASE: app, bin, docker, src, app/config/docker, app/config/nginx"
-  else
-    ensure_dir "$PROJECT_BASE"
-    for dir in app bin config docker src; do ensure_dir "$PROJECT_BASE/$dir"; done
-    ensure_dir "$PROJECT_BASE/config/proxy"
-    ensure_dir "$PROJECT_BASE/config/wordpress"
-    success "Scaffold created under $PROJECT_BASE"
-  fi
-}
-
-generate_env_file() {
-  ENV_FILE="$PROJECT_BASE/docker/.env"
-  TPL_ENV="$CONFIG_BASE/docker/env.project.tpl"
-  ensure_dir "$(dirname "$ENV_FILE")"
-
-  if $WHAT_IF; then
-    whatif "Would generate .env from $TPL_ENV → $ENV_FILE"
-    return
-  fi
-
-  # Copy template into place
-  cp "$TPL_ENV" "$ENV_FILE"
-
-  # Load project-specific values from environments.json
-  project_json=$(jq -r --arg pr "$PROJECT" '.environments[$pr]' "$CONFIG_FILE")
-
-  local app_network
-  app_network="$(appcfg backend_network)"
-
-  # --------------------------------------------------------------------
-  # Build derived values that are NOT stored in environments.json
-  # --------------------------------------------------------------------
-  derived_json=$(jq -n \
-    --arg project_name "$PROJECT" \
-    --arg project_domain "$HOST_DOMAIN" \
-    --arg app_base "$APP_BASE" \
-    --arg project_base "$PROJECT_BASE" \
-    --arg wordpress_image "$WORDPRESS_IMAGE" \
-    --arg wordpress_ssl_port "$WORDPRESS_SSL_PORT" \
-    --arg backend_network "$app_network" \
-    '{
-      project_name: $project_name,
-      project_domain: $project_domain,
-      app_base: $app_base,
-      project_base: $project_base,
-      wordpress_image: $wordpress_image,
-      wordpress_ssl_port: $wordpress_ssl_port,
-      backend_network: $backend_network
-    }'
-  )
-
-  # --------------------------------------------------------------------
-  # Merge project_json + derived_json
-  # --------------------------------------------------------------------
-  merged_json=$(jq -s '.[0] * .[1]' \
-    <(echo "$project_json") \
-    <(echo "$derived_json")
-  )
-
-  # --------------------------------------------------------------------
-  # Replace all {{placeholders}} using merged_json
-  # --------------------------------------------------------------------
-  for key in $(echo "$merged_json" | jq -r 'keys[]'); do
-    [[ "$key" == "secrets" ]] && continue
-    val=$(echo "$merged_json" | jq -c ".${key}")
-    safe_val=$(printf '%s\n' "$val" | sed 's/[&|\\]/\\&/g')
-    sed -i "s|{{${key}}}|${safe_val}|g" "$ENV_FILE"
-  done
-
-  # --------------------------------------------------------------------
-  # Replace secrets (masked in logs)
-  # --------------------------------------------------------------------
-  secrets_json=$(echo "$project_json" | jq -r '.secrets // empty')
-  if [[ -n "$secrets_json" && "$secrets_json" != "null" ]]; then
-    for key in $(echo "$secrets_json" | jq -r 'keys[]'); do
-      val=$(echo "$secrets_json" | jq -c ".${key}")
-      safe_val=$(printf '%s\n' "$val" | sed 's/[&|\\]/\\&/g')
-      info "Replacing {{${key}}} with [*****]"
-      sed -i "s|{{${key}}}|${safe_val}|g" "$ENV_FILE"
-    done
-  fi
-
-  # --------------------------------------------------------------------
-  # Log final expansion
-  # --------------------------------------------------------------------
-  log_env_expansion "$merged_json" "$ENV_FILE"
-  success ".env file generated for $PROJECT"
-}
-
-# Patch FROM line in Dockerfile.wordpress
-# Do not call directly; use copy_if_newer with this as callback
-# Patch only the FROM line that references the wordpress image tag
-patch_wordpress_from_cb() {
-  awk -v img="$WORDPRESS_IMAGE" '
-    /^FROM[[:space:]]+wordpress:/ {
-      print "FROM wordpress:" img " AS wpbuild"
-      next
-    }
-    { print }
-  ' "$1"
-}
-
-deploy_docker_assets() {
-  # Project-local Docker ignore file
-  DOCKERIGNORE_SRC="$APP_BASE/config/docker/.dockerignore.project"
-  DOCKERIGNORE_DST="$PROJECT_BASE/docker/.dockerignore"
-
-  if [[ -f "$DOCKERIGNORE_SRC" ]]; then
-    if [[ "$WHAT_IF" == true ]]; then
-      whatif "Would copy project Docker ignore file from $DOCKERIGNORE_SRC → $DOCKERIGNORE_DST"
-    else
-      cp "$DOCKERIGNORE_SRC" "$DOCKERIGNORE_DST"
-      info "Copied project Docker ignore file from $DOCKERIGNORE_SRC → $DOCKERIGNORE_DST"
-    fi
-  fi
-
-  # WordPress Dockerfile, replace image and version, then deploy to project
-  # WordPress Dockerfile (patched with correct image version)
-  # DOCKER_SRC="$APP_BASE/config/docker/Dockerfile.wordpress"
-  # DOCKER_DST="$PROJECT_BASE/docker/Dockerfile.wordpress"
-  WORDPRESS_IMAGE=$(echo "$PROJECT_CONFIG" | jq -r '.wordpress_image // "php8.1"')
-
-  copy_if_newer "$APP_BASE/config/docker/Dockerfile.wordpress" \
-              "$PROJECT_BASE/docker/Dockerfile.wordpress" \
-              "Dockerfile.wordpress" \
-              patch_wordpress_from_cb
-
-  # Sanity check: confirm FROM line in target Dockerfile
-  if [[ -f "$PROJECT_BASE/docker/Dockerfile.wordpress" ]]; then
-    local from_line
-    from_line="$(head -1 "$PROJECT_BASE/docker/Dockerfile.wordpress")"
-    info "Sanity check: Dockerfile.wordpress FROM line → ${from_line}"
-  fi
-
-  # WP-CLI Dockerfile
-  WPCLI_SRC="$APP_BASE/docker/Dockerfile.wpcli"
-  WPCLI_DST="$PROJECT_BASE/docker/Dockerfile.wpcli"
-
-  if [[ -f "$WPCLI_SRC" ]]; then
-    if [[ "$WHAT_IF" == true ]]; then
-      whatif "Would copy WP-CLI Dockerfile from $WPCLI_SRC → $WPCLI_DST"
-    else
-      copy_if_newer "$APP_BASE/config/docker/Dockerfile.wpcli" \
-                  "$PROJECT_BASE/docker/Dockerfile.wpcli" \
-                  "Dockerfile.wpcli" 
-      info "Copied WP-CLI Dockerfile from $WPCLI_SRC → $WPCLI_DST"
-    fi
-  fi
-
-  COMPOSE_TPL="$APP_BASE/config/docker/compose.project.yml"
-  COMPOSE_OUT="$PROJECT_BASE/docker/compose.project.yml"
-  ensure_dir "$(dirname "$COMPOSE_OUT")"
-
-  if $WHAT_IF; then
-    whatif "Would copy $COMPOSE_TPL → $COMPOSE_OUT"
-  else
-    cp "$COMPOSE_TPL" "$COMPOSE_OUT"
-    success "Copied $COMPOSE_TPL → $COMPOSE_OUT"
-  fi
-}
-
-deploy_project_config() {
-  # Proxy resources
-  PROXY_SRC="$CONFIG_BASE/config/proxy"
-  PROXY_DST="$PROJECT_BASE/config/proxy"
-
-  if [[ -d "$PROXY_SRC" ]]; then
-    if [[ "$WHAT_IF" == true ]]; then
-      whatif "Would copy proxy resources from $PROXY_SRC → $PROXY_DST"
-    else
-      mkdir -p "$PROXY_DST"
-      cp -r "$PROXY_SRC"/* "$PROXY_DST"/
-      info "Copied proxy resources from $PROXY_SRC → $PROXY_DST"
-    fi
-  else
-    error "Proxy source directory not found: $PROXY_SRC"
-  fi
-
-  # WordPress resources ini
-  WP_RESOURCES_SRC="$APP_BASE/config/wordpress/ptek-resources.ini"
-  WP_RESOURCES_DST="$PROJECT_BASE/config/wordpress/ptek-resources.ini"
-
-  if [[ -f "$WP_RESOURCES_SRC" ]]; then
-    if [[ "$WHAT_IF" == true ]]; then
-      whatif "Would copy WordPress resources ini from $WP_RESOURCES_SRC → $WP_RESOURCES_DST"
-    else
-      mkdir -p "$(dirname "$WP_RESOURCES_DST")"
-      cp "$WP_RESOURCES_SRC" "$WP_RESOURCES_DST"
-      info "Copied WordPress resources ini from $WP_RESOURCES_SRC → $WP_RESOURCES_DST"
-    fi
-  else
-    error "WordPress resources ini not found: $WP_RESOURCES_SRC" 
-  fi
-
-  # Project control script
-  PROJECT_SCRIPT_SRC="$APP_BASE/config/bsh/project.sh.tpl"
-  PROJECT_SCRIPT_DST="$PROJECT_BASE/bin/project.sh"
-
-  if [[ -f "$PROJECT_SCRIPT_SRC" ]]; then
-    if [[ "$WHAT_IF" == true ]]; then
-      whatif "Would install project control script from $PROJECT_SCRIPT_SRC → $PROJECT_SCRIPT_DST"
-    else
-      mkdir -p "$(dirname "$PROJECT_SCRIPT_DST")"
-      cp "$PROJECT_SCRIPT_SRC" "$PROJECT_SCRIPT_DST"
-      chmod +x "$PROJECT_SCRIPT_DST"
-      info "Installed project control script at $PROJECT_SCRIPT_DST"
-    fi
-  fi
-}
-
-sync_docs() {
-  local source="$APP_BASE/config/doc"
-  local target="$PROJECT_BASE/doc"
-
-  mkdir -p "$target"
-
-  for file in "$source"/*; do
-    local filename
-    filename=$(basename "$file")
-    copy_if_newer "$file" "$target/$filename" "documentation file $filename"
-  done
-}
-
-# ------------------------------------------------------------
-# Step: Provision WordPress core
-# ------------------------------------------------------------
-deploy_wordpress_core() {
-  info "Provisioning WordPress core for project: $PROJECT_KEY"
-
-  WP_SCRIPT="${APP_BASE}/bin/deploy_wordpress.sh"
-
-  if [[ ! -x "$WP_SCRIPT" ]]; then
-    error "WordPress provisioning script not found or not executable: $WP_SCRIPT"
-    exit 1
-  fi
-
-  WP_WHAT_IF=""
-  $WHAT_IF && WP_WHAT_IF="--what-if"
-
-  run_or_preview "Running WordPress provisioning script" \
-    "$WP_SCRIPT" --project "$PROJECT_KEY" $WP_WHAT_IF
-
-  success "WordPress core provisioning complete"  
-}
-
-#
-# === Deploy dev sources (themes/plugins) for the current project ===
-#
-deploy_project_dev_sources() {
-  local project_key="$PROJECT"
-
-  if [[ -z "$PROJECT_CONFIG" ]]; then
-    error "PROJECT_CONFIG is not defined. Did you run resolve_project()?"
-    return 1
-  fi
-
-  info "Provisioning dev sources for project: $project_key"
-
-  # Deploy themes
-  for row in $(echo "$PROJECT_CONFIG" | jq -c ".projects[\"$project_key\"].dev_sources.themes[]?"); do
-    local name source type
-    name=$(echo "$row" | jq -r '.name')
-    source=$(echo "$row" | jq -r '.source')
-    type=$(echo "$row" | jq -r '.type')
-
-    info "Provisioning theme: $name ($type)"
-    deploy_dev_code "$source" "themes/$name"
-  done
-
-  # Deploy plugins
-  for row in $(echo "$PROJECT_CONFIG" | jq -c ".projects[\"$project_key\"].dev_sources.plugins[]?"); do
-    local name source type
-    name=$(echo "$row" | jq -r '.name')
-    source=$(echo "$row" | jq -r '.source')
-    type=$(echo "$row" | jq -r '.type')
-
-    info "Provisioning plugin: $name ($type)"
-    deploy_dev_code "$source" "plugins/$name"
-  done
-}
-
-
-init_project() {
-
-  # Ensure required binaries are available
-  check_binary docker git jq
-
-  scaffold_directories
-  deploy_project_config
-  generate_env_file
-  deploy_docker_assets
-
-  # Sync documentation files
-  sync_docs
-
-  # Deploy Project Assets
-  "$APP_BASE/bin/generate_project_assets.sh" --project "$PROJECT"
-
-  # Deploy WordPress core
-  deploy_wordpress_core
-
-  # Deploy theme code
-  deploy_project_dev_sources
-}
-
-# Exxplicit UP action
-do_up() {
-  if [[ "$WHAT_IF" == true ]]; then
-    whatif "docker compose up -d"
-  else
-    docker compose \
-      --project-directory "$PROJECT_BASE/docker" \
-      -f "$PROJECT_BASE/docker/compose.project.yml" \
-      up -d
-  fi
-}
-
-# Explicit DOWN action
-do_down() {
-  if [[ "$WHAT_IF" == true ]]; then
-    whatif "docker compose down"
-  else
-    docker compose \
-      --project-directory "$PROJECT_BASE/docker" \
-      -f "$PROJECT_BASE/docker/compose.project.yml" \
-      down
-  fi
-}
-
-# Explicit RESET action
-do_reset() {
-  if [[ "$WHAT_IF" == true ]]; then
-    whatif "docker compose down && re-init"
-  else
-    docker compose \
-      --project-directory "$PROJECT_BASE/docker" \
-      -f "$PROJECT_BASE/docker/compose.project.yml" \
-      down
-
-    scaffold_directories
-    generate_env_file
-    deploy_docker_assets
-
-    docker compose \
-      --project-directory "$PROJECT_BASE/docker" \
-      -f "$PROJECT_BASE/docker/compose.project.yml" \
-      up -d
-  fi
-}
-
-provision_project() {
-  parse_options "$@"
-  resolve_project
-  docker_check
-
-  case "$ACTION" in
-    init)
-      if init_project; then
-        if [[ "$WHAT_IF" == true ]]; then
-          whatif "Init successful — would automatically perform UP action"
-        else
-          info "Init successful — automatically performing UP action"
-          do_up
-        fi
-      else
-        error "Init failed — not performing UP"
-        return 1
-      fi
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -p|--project)
+      PROJECT="$2"
+      shift 2
       ;;
-
-    up)
-      do_up
+    -a|--action)
+      ACTION="$2"
+      shift 2
       ;;
-
-    down)
-      do_down
+    -w|--what-if)
+      WHAT_IF=true
+      shift
       ;;
-
-    reset)
-      do_reset
+    -h|--help)
+      usage
+      exit 0
       ;;
-
     *)
-      error "Unknown action: $ACTION"
+      error "Unknown argument: $1"
       usage
       exit 1
       ;;
   esac
+done
 
-  success "Provision action '$ACTION' complete for $PROJECT ($HOST_DOMAIN)"
+if [[ -z "$PROJECT" ]]; then
+  error "Missing required --project <key>"
+  usage
+  exit 1
+fi
+
+if [[ -z "$ACTION" ]]; then
+  error "Missing required --action <deploy|start|stop|restart>"
+  usage
+  exit 1
+fi
+
+case "$ACTION" in
+  deploy|start|stop|restart) ;;
+  *)
+    error "Invalid action: $ACTION"
+    usage
+    exit 1
+    ;;
+esac
+
+info "Project: $PROJECT"
+info "Action:  $ACTION"
+$WHAT_IF && info "Mode:    WHAT-IF (dry run)"
+
+# ==============================================================================
+# Load project configuration
+# ==============================================================================
+info "Loading project configuration for '$PROJECT'"
+
+if [[ ! -f "$PROJECTS_FILE" ]]; then
+  error "Missing projects.json at: $PROJECTS_FILE"
+  exit 1
+fi
+
+project_config_load "$PROJECT"
+
+PROJECT_REPO="$(prcfg project_repo)"
+PROJECT_DOMAIN="$(prcfg project_domain)"
+PROJECT_NETWORK="$(prcfg project_network)"
+
+if [[ -z "$PROJECT_REPO" ]]; then
+  error "project_repo not resolved for project '$PROJECT'"
+  exit 1
+fi
+
+info "Resolved project repo: $PROJECT_REPO"
+
+if $WHAT_IF; then
+  whatif "Would operate on project repo: $PROJECT_REPO"
+fi
+
+# ==============================================================================
+# Directory Scaffolding
+# ==============================================================================
+scaffold_directories() {
+  info "Scaffolding project directories"
+
+  local dirs=(
+    "$PROJECT_REPO"
+    "$PROJECT_REPO/docker"
+    "$PROJECT_REPO/config"
+    "$PROJECT_REPO/config/proxy"
+    "$PROJECT_REPO/config/wordpress"
+    "$PROJECT_REPO/src"
+    "$PROJECT_REPO/src/plugins"
+    "$PROJECT_REPO/src/themes"
+    "$PROJECT_REPO/logs"
+  )
+
+  for d in "${dirs[@]}"; do
+    if $WHAT_IF; then
+      whatif "Would create directory: $d"
+    else
+      mkdir -p "$d"
+    fi
+  done
 }
 
+# ==============================================================================
+# Generate .env from template
+# ==============================================================================
+generate_env_file() {
+  local tpl="$APP_BASE/config/docker/env.project.tpl"
+  local out="$PROJECT_REPO/.env"
 
-provision_project "$@"
+  info "Generating .env → $out"
+
+  if [[ ! -f "$tpl" ]]; then
+    error "Missing env.project.tpl at $tpl"
+    exit 1
+  fi
+
+  if $WHAT_IF; then
+    whatif "Would generate $out from $tpl"
+    return
+  fi
+
+  sed \
+    -e "s|{{project_key}}|$PROJECT|g" \
+    -e "s|{{project_domain}}|$PROJECT_DOMAIN|g" \
+    -e "s|{{project_network}}|$PROJECT_NETWORK|g" \
+    "$tpl" > "$out"
+
+  success ".env created"
+}
+
+# ==============================================================================
+# Generate compose.project.yml
+# ==============================================================================
+generate_compose_file() {
+  local tpl="$APP_BASE/config/docker/compose.project.yml"
+  local out="$PROJECT_REPO/docker/compose.project.yml"
+
+  info "Generating compose.project.yml → $out"
+
+  if [[ ! -f "$tpl" ]]; then
+    error "Missing compose.project.yml at $tpl"
+    exit 1
+  fi
+
+  if $WHAT_IF; then
+    whatif "Would generate $out from $tpl"
+    return
+  fi
+
+  sed \
+    -e "s|{{project_key}}|$PROJECT|g" \
+    -e "s|{{project_domain}}|$PROJECT_DOMAIN|g" \
+    -e "s|{{project_network}}|$PROJECT_NETWORK|g" \
+    "$tpl" > "$out"
+
+  success "compose.project.yml created"
+}
+
+copy_docker_templates() {
+  local src="$CONFIG_BASE/docker"
+  local dst="$PROJECT_REPO/docker"
+
+  info "Copying Docker engine templates"
+
+  if [[ ! -d "$src" ]]; then
+    error "Missing Docker templates at $src"
+    exit 1
+  fi
+
+  if $WHAT_IF; then
+    whatif "Would copy $src/* → $dst/"
+    return
+  fi
+
+  mkdir -p "$dst"
+  cp -R "$src/"* "$dst/"
+
+  success "Docker templates copied"
+}
+
+# ==============================================================================
+# Actions
+# ==============================================================================
+action_deploy() {
+  scaffold_directories
+  copy_docker_templates
+  copy_proxy_templates
+  copy_wordpress_templates
+  generate_env_file
+  generate_compose_file
+  success "Project '$PROJECT' deployed"
+}
+
+action_start() {
+  info "Starting project containers"
+  if $WHAT_IF; then
+    whatif "Would run: docker compose -f $PROJECT_REPO/compose.project.yml up -d"
+  else
+    docker compose -f "$PROJECT_REPO/compose.project.yml" up -d
+  fi
+  success "Project '$PROJECT' started"
+}
+
+action_stop() {
+  info "Stopping project containers"
+  if $WHAT_IF; then
+    whatif "Would run: docker compose -f $PROJECT_REPO/compose.project.yml down"
+  else
+    docker compose -f "$PROJECT_REPO/compose.project.yml" down
+  fi
+  success "Project '$PROJECT' stopped"
+}
+
+action_restart() {
+  action_stop
+  action_start
+}
+
+# ==============================================================================
+# Dispatch
+# ==============================================================================
+case "$ACTION" in
+  deploy)   action_deploy ;;
+  start)    action_start ;;
+  stop)     action_stop ;;
+  restart)  action_restart ;;
+esac
+
+exit 0

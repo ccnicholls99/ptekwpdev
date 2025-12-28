@@ -3,7 +3,7 @@
 #  PTEKWPDEV — App Deployment Script
 #  Script: app_deploy.sh
 #  Synopsis:
-#    Deploy the app-level runtime environment by generating environments.json
+#    Deploy the app-level runtime environment by generating projects.json
 #    from the existing template, copying runtime config templates into
 #    CONFIG_BASE, generating the app-level .env file, and starting core
 #    containers.
@@ -11,15 +11,16 @@
 #  Description:
 #    This script uses the static app-level configuration stored in app.json
 #    (loaded via app_config.sh) and the runtime template stored in
-#    APP_BASE/config/environments.tpl.json to generate the runtime
-#    environments.json file. It then deploys Docker engine templates,
-#    generates the .env file, and starts the core containers.
+#    APP_BASE/app/config/projects.tpl.json to generate the runtime
+#    CONFIG_BASE/config/projects.json file. It then deploys Docker engine
+#    templates, container configuration templates, generates the .env file,
+#    and starts the core containers.
 #
 #  Notes:
 #    - Must be executed from PTEK_APP_BASE/bin
 #    - Uses PTEKWPCFG + appcfg() for all app-level settings
-#    - environments.json contains ONLY runtime + project-level settings
-#    - No app-level secrets or constants are written to environments.json
+#    - projects.json contains ONLY runtime + project-level settings
+#    - No app-level secrets or constants are written to projects.json
 # ==============================================================================
 
 set -o errexit
@@ -54,11 +55,16 @@ set_log --truncate "$(appcfg app_log_dir)/app_deploy.log" \
 # ------------------------------------------------------------------------------
 
 CONFIG_BASE="$(appcfg config_base)"
+
 DOCKER_SRC_DIR="${APP_BASE}/config/docker"
 DOCKER_DST_DIR="${CONFIG_BASE}/docker"
 
-ENV_TPL="${APP_BASE}/config/environments.tpl.json"
-ENV_OUT="${CONFIG_BASE}/environments.json"
+# Env + container config live under app/config and config/
+APP_ENV_CONFIG_DIR="${APP_BASE}/app/config"
+CONFIG_CONFIG_DIR="${CONFIG_BASE}/config"
+
+PROJECTS_TPL="$APP_ENV_CONFIG_DIR/projects.tpl.json"
+PROJECTS_OUT="$CONFIG_CONFIG_DIR/projects.json"
 
 WHAT_IF=false
 ACTION=""
@@ -72,7 +78,7 @@ usage() {
 Usage: app_deploy.sh -a {init|up|down|reset} [-w]
 
 Actions:
-  init   Generate environments.json, deploy templates, generate .env, start containers
+  init   Generate projects.json, deploy templates, generate .env, start containers
   up     Start containers only
   down   Stop containers
   reset  Stop containers and remove volumes
@@ -93,48 +99,144 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ------------------------------------------------------------------------------
-# Generate environments.json from template
+# Generate projects.json from template
 # ------------------------------------------------------------------------------
 
-generate_environments_json() {
-  info "Generating environments.json → ${ENV_OUT}"
+generate_projects_json() {
+  info "Generating projects.json → ${PROJECTS_OUT}"
 
-  if [[ ! -f "$ENV_TPL" ]]; then
-    error "Missing template: ${ENV_TPL}"
+  if [[ ! -f "$PROJECTS_TPL" ]]; then
+    error "Missing template: ${PROJECTS_TPL}"
     exit 1
   fi
 
   if $WHAT_IF; then
-    whatif "Would generate ${ENV_OUT} from ${ENV_TPL}"
+    whatif "Would generate ${PROJECTS_OUT} from ${PROJECTS_TPL}"
     return
   fi
 
+  # Ensure output directory exists
+  mkdir -p "$(dirname "$PROJECTS_OUT")"
+
   # Copy template as-is
-  cp "${ENV_TPL}" "${ENV_OUT}"
+  cp "${PROJECTS_TPL}" "${PROJECTS_OUT}"
 
   # Validate JSON
-  if ! jq empty "${ENV_OUT}" >/dev/null 2>&1; then
-    error "Generated environments.json is invalid JSON"
+  if ! jq empty "${PROJECTS_OUT}" >/dev/null 2>&1; then
+    error "Generated projects.json is invalid JSON"
     exit 1
   fi
 
-  success "environments.json created"
+  success "projects.json created"
 }
 
 # ------------------------------------------------------------------------------
-# Deploy Docker templates
+# Initialize demo project in projects.json
+# ------------------------------------------------------------------------------
+
+initialize_demo_project() {
+  info "Initializing demo project in ${PROJECTS_OUT}"
+
+  if $WHAT_IF; then
+    whatif "Would overwrite ${PROJECTS_OUT} with a demo project definition"
+    return
+  fi
+
+  mkdir -p "$(dirname "$PROJECTS_OUT")"
+
+  jq -n '
+    {
+      projects: {
+        demo: {
+          project_domain: "demo.local",
+          project_network: "ptekwpdev_demo_net",
+          base_dir: "demo",
+          wordpress: {
+            image: "wordpress:latest",
+            host: "demo.local",
+            port: 8080,
+            ssl_port: 8443
+          },
+          secrets: {
+            sqldb_name: "demo_db",
+            sqldb_user: "demo_user",
+            sqldb_pass: "demo_pass",
+            wp_admin_user: "admin",
+            wp_admin_email: "admin@demo.local",
+            wp_admin_pass: "password"
+          },
+          dev_sources: {
+            plugins: [],
+            themes: []
+          }
+        }
+      }
+    }
+  ' > "${PROJECTS_OUT}"
+
+  # Validate JSON again
+  if ! jq empty "${PROJECTS_OUT}" >/dev/null 2>&1; then
+    error "Initialized projects.json is invalid JSON"
+    exit 1
+  fi
+
+  success "Demo project initialized in projects.json"
+}
+
+# ------------------------------------------------------------------------------
+# Deploy env templates from APP_BASE/app/config → CONFIG_BASE/config
+# ------------------------------------------------------------------------------
+
+deploy_env_templates() {
+  info "Deploying env templates from ${APP_ENV_CONFIG_DIR} → ${CONFIG_CONFIG_DIR}"
+
+  if $WHAT_IF; then
+    whatif "Would copy ${APP_ENV_CONFIG_DIR}/env.*.tpl → ${CONFIG_CONFIG_DIR}/"
+    return
+  fi
+
+  mkdir -p "${CONFIG_CONFIG_DIR}"
+
+  # Copy any env.*.tpl (env.app.tpl, env.project.tpl, env.sqladmin.tpl, etc.)
+  shopt -s nullglob
+  local env_templates=("${APP_ENV_CONFIG_DIR}"/env.*.tpl)
+  shopt -u nullglob
+
+  if ((${#env_templates[@]} == 0)); then
+    warn "No env.*.tpl templates found in ${APP_ENV_CONFIG_DIR}"
+    return
+  fi
+
+  for tpl in "${env_templates[@]}"; do
+    local base
+    base="$(basename "$tpl")"
+    cp "$tpl" "${CONFIG_CONFIG_DIR}/${base}"
+    info "Copied $tpl → ${CONFIG_CONFIG_DIR}/${base}"
+  done
+
+  success "Env templates deployed"
+}
+
+# ------------------------------------------------------------------------------
+# Deploy Docker templates APP_BASE/config/docker → CONFIG_BASE/docker
 # ------------------------------------------------------------------------------
 
 deploy_docker_templates() {
   info "Deploying Docker engine templates → ${DOCKER_DST_DIR}"
 
+  if [[ ! -d "$DOCKER_SRC_DIR" ]]; then
+    error "Missing docker template directory: ${DOCKER_SRC_DIR}"
+    exit 1
+  fi
+
   mkdir -p "${DOCKER_DST_DIR}"
 
   local assets=(
     "compose.app.yml"
+    "compose.project.yml"
     "Dockerfile.wordpress"
     "Dockerfile.wpcli"
-    "env.app.tpl"
+    ".dockerignore"
   )
 
   for file in "${assets[@]}"; do
@@ -158,11 +260,45 @@ deploy_docker_templates() {
 }
 
 # ------------------------------------------------------------------------------
-# Generate .env from env.app.tpl
+# Deploy container config directories APP_BASE/config → CONFIG_BASE/config
+# ------------------------------------------------------------------------------
+
+deploy_container_configs() {
+  info "Deploying container config directories from ${APP_BASE}/config → ${CONFIG_CONFIG_DIR}"
+
+  local src="${APP_BASE}/config"
+  local dst="${CONFIG_CONFIG_DIR}"
+
+  local dirs=(
+    proxy
+    wordpress
+    sqladmin
+    doc
+  )
+
+  for d in "${dirs[@]}"; do
+    if [[ -d "$src/$d" ]]; then
+      if $WHAT_IF; then
+        whatif "Would copy $src/$d → $dst/$d"
+      else
+        mkdir -p "$dst/$d"
+        cp -R "$src/$d/"* "$dst/$d/" 2>/dev/null || true
+        info "Copied $src/$d → $dst/$d"
+      fi
+    else
+      warn "Container config directory not found: $src/$d"
+    fi
+  done
+
+  success "Container config directories deployed"
+}
+
+# ------------------------------------------------------------------------------
+# Generate .env from env.app.tpl (now from CONFIG_BASE/config)
 # ------------------------------------------------------------------------------
 
 generate_env_file() {
-  local tpl="${DOCKER_DST_DIR}/env.app.tpl"
+  local tpl="${CONFIG_CONFIG_DIR}/env.app.tpl"
   local env_file="${DOCKER_DST_DIR}/.env"
 
   if [[ ! -f "$tpl" ]]; then
@@ -197,7 +333,7 @@ generate_env_file() {
 
 start_containers() {
   if $WHAT_IF; then
-    whatif "Would start core containers"
+    whatif "Would start core containers using compose.app.yml in ${DOCKER_DST_DIR}"
     return
   fi
 
@@ -229,8 +365,11 @@ reset_containers() {
 
 case "${ACTION:-}" in
   init)
-    generate_environments_json
+    generate_projects_json
+    initialize_demo_project
+    deploy_env_templates
     deploy_docker_templates
+    deploy_container_configs
     generate_env_file
     start_containers
 

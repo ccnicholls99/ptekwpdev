@@ -1,0 +1,35 @@
+{
+  "app_key": "ptekwpdev",
+  "app_base": "/home/ccnicholls/projects/ptekwpdev",
+  "config_base": "/home/ccnicholls/.ptekwpdev",
+  "project_base": "/home/ccnicholls/projects",
+
+  "backend_network": "ptekwpdev_backend",
+
+  "secrets": {
+    "sqldb_root": "root",
+    "sqldb_root_pass": "s0RkjGWXo"
+  },
+
+  "database": {
+    "sqldb_port": "3306",
+    "sqldb_image": "mariadb:10.11",
+    "sqldb_version": "10.5",
+
+    "sqladmin_image": "phpmyadmin/phpmyadmin",
+    "sqladmin_version": "latest",
+    "sqladmin_port": "5211"
+  },
+
+  "assets": {
+    "container": "ptekwpdev_assets",
+    "root_path": "/usr/src/ptekwpdev/assets"
+  },
+
+  "wordpress_defaults": {
+    "image": "wordpress:latest",
+    "php_version": "8.2",
+    "port": 8080,
+    "ssl_port": 8443
+  }
+}

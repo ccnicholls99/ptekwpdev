@@ -48,7 +48,7 @@ PTEK_APP_BASE="$(cd "${PTEK_LIB_DIR}/.." && pwd)"
 # ------------------------------------------------------------------------------
 
 CONFIG_BASE="${HOME}/.ptekwpdev"
-APP_JSON="${CONFIG_BASE}/app.json"
+APP_JSON="${CONFIG_BASE}/config/app.json"
 
 if [[ ! -f "$APP_JSON" ]]; then
   echo "ERROR: Missing app.json:"

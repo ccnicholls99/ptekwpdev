@@ -78,10 +78,10 @@ SQDB_ROOT_PASS="$(generate_secret)"
 SQDB_ROOT_USER="root"
 
 # ------------------------------------------------------------------------------
-# Generate app.json in CONFIG_BASE
+# Generate app.json in APP_BASE, ready to be deployed to CONFIG_BASE
 # ------------------------------------------------------------------------------
 
-APP_JSON="${CONFIG_BASE}/app.json"
+APP_JSON="${APP_BASE}/app/config/app.json"
 
 info "Generating app.json → ${APP_JSON}"
 
@@ -142,10 +142,14 @@ success "app.json validated"
 
 info "Preparing CONFIG_BASE directory structure"
 
+mkdir -p "${CONFIG_BASE}/config"
 mkdir -p "${CONFIG_BASE}/docker"
 mkdir -p "${CONFIG_BASE}/config/proxy"
 mkdir -p "${CONFIG_BASE}/config/wordpress"
 mkdir -p "${CONFIG_BASE}/config/php"
+
+info "Copying app.json into $CONFIG_BASE/config"
+cp "$APP_BASE/app/config/app.json" "$CONFIG_BASE/config"
 
 success "CONFIG_BASE initialized"
 
