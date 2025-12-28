@@ -164,28 +164,29 @@ flowchart TD
     %% GLOBAL CONFIG (APP LEVEL)
     %% ============================
 
-    A1[app.json<br/>• app_base<br/>• config_base<br/>• project_base<br/>• backend_network<br/>• database.*<br/>• wordpress_defaults.*] 
-        --> A2[app_config.sh<br/>appcfg accessor]
+    A1[app.json\napp_base, config_base, project_base\nbackend_network, database, wordpress_defaults]
+    A2[app_config.sh\n(appcfg accessor)]
+    A3[app_deploy.sh\nGlobal provisioning]
 
-    A2 --> A3[app_deploy.sh<br/>Global provisioning]
+    A1 --> A2 --> A3
 
     A3 --> A4[Global Backend Network]
-    A3 --> A5[Global SQLDB Container<br/>ptekwpdev_db]
+    A3 --> A5[Global SQLDB Container\nptekwpdev_db]
     A3 --> A6[Global SQL Admin Container]
-    A3 --> A7[Global Assets Volume<br/>ptekwpdev_assets_volume]
+    A3 --> A7[Global Assets Volume\nptekwpdev_assets_volume]
 
 
     %% ============================
     %% PROJECT CONFIG (PER PROJECT)
     %% ============================
 
-    B1[environments.json<br/>projects.{key}<br/>• project_domain<br/>• project_network<br/>• base_dir<br/>• wordpress.*<br/>• secrets.*<br/>• dev_sources.*]
-        --> B2[project_deploy.sh]
+    B1[environments.json\nprojects.{key}\nproject_domain, project_network, base_dir\nwordpress.*, secrets.*, dev_sources.*]
+    B2[project_deploy.sh]
+    B3[derived_json\n(lowercase merged config)]
+    B4[env.project.tpl]
+    B5[.env (project env vars)]
 
-    B2 --> B3[derived_json<br/>lowercase merged config]
-
-    B3 --> B4[env.project.tpl]
-    B4 --> B5[.env (project env vars)]
+    B1 --> B2 --> B3 --> B4 --> B5
 
 
     %% ============================
@@ -194,16 +195,17 @@ flowchart TD
 
     B5 --> C1[compose.project.yml]
 
-    C1 --> C2[wp container<br/>WordPress]
+    C1 --> C2[wp container\nWordPress]
     C1 --> C3[wpcli container]
-    C1 --> C4[proxy container<br/>NGINX]
+    C1 --> C4[proxy container\nNGINX]
 
-    C1 --> C5[frontend network<br/>name=${FRONTEND_NETWORK}]
-    C1 --> C6[backend network<br/>name=${BACKEND_NETWORK}]
+    C1 --> C5[frontend network\nname=${FRONTEND_NETWORK}]
+    C1 --> C6[backend network\nname=${BACKEND_NETWORK}]
 
     C2 --> C6
     C3 --> C6
     C4 --> C5
+
 
     %% ============================
     %% DATABASE CONNECTION
@@ -216,12 +218,12 @@ flowchart TD
     %% PROXY ROUTING
     %% ============================
 
-    C4 -->|server_name ${PROJECT_DOMAIN}| C2
+    C4 -->|server_name PROJECT_DOMAIN| C2
 
 
     %% ============================
     %% DEV SOURCES + ASSETS
     %% ============================
 
-    B2 --> D1[dev_sources deployment<br/>plugins/themes]
-    C2 --> D2[Assets Volume<br/>ptekwpdev_assets_volume]
+    B2 --> D1[dev_sources deployment\nplugins/themes]
+    C2 --> D2[Assets Volume\nptekwpdev_assets_volume]
