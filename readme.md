@@ -155,7 +155,9 @@ For community projects (e.g., fishing co-op, Poker Run), symbolic hostnames (`ma
 
 MIT License – free to use, modify, and distribute.
 
+## 📜 Provisioning Flow
 
+```mermaid
 flowchart TD
 
     %% ============================
