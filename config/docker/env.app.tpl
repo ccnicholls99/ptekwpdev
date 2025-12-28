@@ -1,19 +1,31 @@
-# --------------------------------------------------------------------
-# App-wide Environment Settings for ptekwpdev
-# --------------------------------------------------------------------
+# ==============================================================================
+#  PTEKWPDEV — App-Level Environment Template
+#  Used by app_deploy.sh to generate CONFIG_BASE/docker/.env
+# ==============================================================================
 
-# Network for backend containers
+# ----------------------------------------------------------------------
+# Networking
+# ----------------------------------------------------------------------
 BACKEND_NETWORK={{backend_network}}
 
-# SQL Database root credentials (used by app-wide DB container)
-SQLDB_PORT={{sqldb_port}}
-MYSQL_ROOT_USER={{sqldb_root}}
-MYSQL_ROOT_PASSWORD={{sqldb_root_pass}}
+# ----------------------------------------------------------------------
+# Database Engine (MariaDB)
+# ----------------------------------------------------------------------
+SQLDB_IMAGE={{database.sqldb_image}}
+SQLDB_VERSION={{database.sqldb_version}}
+SQLDB_PORT={{database.sqldb_port}}
 
-# Paths
-BUILD_HOME={{build_home}}
-PROJECT_BASE={{project_base}}
+SQLDB_ROOT_USER={{secrets.sqldb_root}}
+SQLDB_ROOT_PASS={{secrets.sqldb_root_pass}}
 
-# SQL Admin defaults
-SQLADMIN_IMAGE={{sqladmin_image}}
-SQLADMIN_PORT={{sqladmin_port}}
+# ----------------------------------------------------------------------
+# SQL Admin (phpMyAdmin)
+# ----------------------------------------------------------------------
+SQLADMIN_IMAGE={{database.sqladmin_image}}
+SQLADMIN_VERSION={{database.sqladmin_version}}
+SQLADMIN_PORT={{database.sqladmin_port}}
+
+# ----------------------------------------------------------------------
+# Assets Container (if used by core services)
+# ----------------------------------------------------------------------
+ASSETS_CONTAINER={{assets.container}}

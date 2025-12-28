@@ -112,10 +112,6 @@ generate_environments_json() {
   # Copy template as-is
   cp "${ENV_TPL}" "${ENV_OUT}"
 
-  # Remove obsolete app-level keys
-  jq 'del(.app.build_home, .app.project_base, .app.backend_network, .app.secrets)' \
-    "${ENV_OUT}" > "${ENV_OUT}.tmp" && mv "${ENV_OUT}.tmp" "${ENV_OUT}"
-
   # Validate JSON
   if ! jq empty "${ENV_OUT}" >/dev/null 2>&1; then
     error "Generated environments.json is invalid JSON"
@@ -237,6 +233,7 @@ case "${ACTION:-}" in
     deploy_docker_templates
     generate_env_file
     start_containers
+
     success "App environment deployed at ${CONFIG_BASE}"
     ;;
   up)

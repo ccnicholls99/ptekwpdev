@@ -5,7 +5,7 @@ services:
     image: mysql:8.0
     container_name: ptekwpdev_db
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${SQLDB_ROOT_PASS}
     volumes:
       - ptekwpdev_db_volume:/var/lib/mysql
     networks:

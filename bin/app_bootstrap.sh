@@ -87,16 +87,26 @@ info "Generating app.json → ${APP_JSON}"
 
 cat > "${APP_JSON}" <<EOF
 {
-  "APP_KEY": "ptekwpdev",
-  "APP_BASE": "${APP_BASE}",
-  "CONFIG_BASE": "${CONFIG_BASE}",
-  "PROJECT_BASE": "${PROJECT_BASE}",
+  "app_key": "ptekwpdev",
+  "app_base": "${APP_BASE}",
+  "config_base": "${CONFIG_BASE}",
+  "project_base": "${PROJECT_BASE}",
 
   "backend_network": "ptekwpdev_backend",
 
   "secrets": {
     "sqldb_root": "${SQDB_ROOT_USER}",
     "sqldb_root_pass": "${SQDB_ROOT_PASS}"
+  },
+
+  "database": {
+    "sqldb_port": "3306",
+    "sqldb_image": "mariadb:10.11",
+    "sqldb_version": "10.5",
+
+    "sqladmin_image": "phpmyadmin/phpmyadmin",
+    "sqladmin_version": "latest",
+    "sqladmin_port": "5211"
   },
 
   "assets": {

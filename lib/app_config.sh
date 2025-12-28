@@ -6,8 +6,8 @@
 #
 #  Description:
 #    Canonical loader for app-level configuration. Must be sourced, not executed.
-#    Loads APP_BASE/app/config/ptekwpdev.json and stores all configuration
-#    values in an in-memory associative array named PTEKWPCFG.
+#    Loads CONFIG_BASE/app.json and flattens all keys into an in-memory
+#    associative array (PTEKWPCFG) using dot-notation.
 #
 #  Contract:
 #    - Must be sourced
@@ -32,81 +32,84 @@ fi
 
 PTEK_CALLER_PWD="$(pwd)"
 ptekwp_cleanup() {
-  # PTEK_CALLER_PWD should always exist but let's keep shellcheck happy.
   cd "$PTEK_CALLER_PWD" || true
 }
 trap ptekwp_cleanup EXIT
 
 # ------------------------------------------------------------------------------
-# Resolve PTEK_APP_BASE (scripts always run from APP_BASE/bin)
+# Resolve APP_BASE
 # ------------------------------------------------------------------------------
 
 PTEK_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PTEK_APP_BASE="$(cd "${PTEK_LIB_DIR}/.." && pwd)"
 
-PTEK_JSON_FILE="${PTEK_APP_BASE}/app/config/ptekwpdev.json"
-
 # ------------------------------------------------------------------------------
-# Ensure config exists
+# Resolve CONFIG_BASE and app.json location
 # ------------------------------------------------------------------------------
 
-if [[ ! -f "$PTEK_JSON_FILE" ]]; then
-  echo "ERROR: Missing app config file:"
-  echo "  $PTEK_JSON_FILE"
+CONFIG_BASE="${HOME}/.ptekwpdev"
+APP_JSON="${CONFIG_BASE}/app.json"
+
+if [[ ! -f "$APP_JSON" ]]; then
+  echo "ERROR: Missing app.json:"
+  echo "  $APP_JSON"
   echo "Run: ${PTEK_APP_BASE}/bin/app_bootstrap.sh"
-  # shellcheck disable=SC2317
   return 1 2>/dev/null || exit 1
 fi
 
 # ------------------------------------------------------------------------------
-# Create global associative array for config
+# Create global associative array
 # ------------------------------------------------------------------------------
 
-declare -g -A PTEKWPCFG
+declare -g -A PTEKWPCFG=()
 
 # ------------------------------------------------------------------------------
-# Load JSON values into the dictionary
+# Flatten JSON into dot-notation keys
 # ------------------------------------------------------------------------------
 
-PTEKWPCFG[app_key]="$(jq -r '.APP_KEY' "$PTEK_JSON_FILE")"
-PTEKWPCFG[app_base]="$(jq -r '.APP_BASE' "$PTEK_JSON_FILE")"
-PTEKWPCFG[config_base]="$(jq -r '.CONFIG_BASE' "$PTEK_JSON_FILE")"
-PTEKWPCFG[project_base]="$(jq -r '.PROJECT_BASE' "$PTEK_JSON_FILE")"
-
-# Assets section
-PTEKWPCFG[assets_container]="$(jq -r '.assets.container' "$PTEK_JSON_FILE")"
-PTEKWPCFG[assets_root]="$(jq -r '.assets.root_path' "$PTEK_JSON_FILE")"
+while IFS=$'\t' read -r key value; do
+  clean_key="${key#.}"        # remove leading dot
+  clean_val="${value%\"}"     # strip trailing quote
+  clean_val="${clean_val#\"}" # strip leading quote
+  PTEKWPCFG["$clean_key"]="$clean_val"
+done < <(
+  jq -r '
+    paths(scalars) as $p |
+    [ $p | join(".") ] + [ getpath($p) ] |
+    @tsv
+  ' "$APP_JSON"
+)
 
 # ------------------------------------------------------------------------------
-# Validate JSON values
+# Validate required keys
 # ------------------------------------------------------------------------------
-
-if [[ "${PTEKWPCFG[app_base]}" != "$PTEK_APP_BASE" ]]; then
-  echo "ERROR: PTEK_APP_BASE mismatch."
-  echo "  From filesystem: $PTEK_APP_BASE"
-  echo "  From JSON:       ${PTEKWPCFG[app_base]}"
-  echo "This repo may have been moved. Re-run:"
-  echo "  ${PTEK_APP_BASE}/bin/app_bootstrap.sh --no-prompt --overwrite"
-  # shellcheck disable=SC2317
-  return 1 2>/dev/null || exit 1
-fi
 
 required_keys=(
-  app_key
   app_base
   config_base
   project_base
-  assets_container
-  assets_root
+  backend_network
 )
 
 for key in "${required_keys[@]}"; do
   if [[ -z "${PTEKWPCFG[$key]:-}" ]]; then
-    echo "ERROR: Required config value '$key' missing in ptekwpdev.json"
-  # shellcheck disable=SC2317
+    echo "ERROR: Required config key missing: $key"
     return 1 2>/dev/null || exit 1
   fi
 done
+
+# ------------------------------------------------------------------------------
+# Validate APP_BASE consistency
+# ------------------------------------------------------------------------------
+
+if [[ "${PTEKWPCFG[app_base]}" != "$PTEK_APP_BASE" ]]; then
+  echo "ERROR: APP_BASE mismatch."
+  echo "  Filesystem: $PTEK_APP_BASE"
+  echo "  app.json:   ${PTEKWPCFG[app_base]}"
+  echo "This repo may have been moved. Re-run:"
+  echo "  ${PTEK_APP_BASE}/bin/app_bootstrap.sh --overwrite"
+  return 1 2>/dev/null || exit 1
+fi
 
 # ------------------------------------------------------------------------------
 # Derive static repo paths (not stored in JSON)
@@ -117,7 +120,6 @@ PTEKWPCFG[app_log_dir]="${PTEK_APP_BASE}/app/logs"
 PTEKWPCFG[app_bin_dir]="${PTEK_APP_BASE}/bin"
 PTEKWPCFG[app_assets_dir]="${PTEK_APP_BASE}/app/assets"
 
-# Runtime environments file
 PTEKWPCFG[environments_file]="${PTEKWPCFG[config_base]}/environments.json"
 
 # ------------------------------------------------------------------------------
@@ -129,14 +131,16 @@ PTEK_OUTPUT_LIB="${PTEK_APP_BASE}/lib/output.sh"
 if [[ ! -f "$PTEK_OUTPUT_LIB" ]]; then
   echo "ERROR: Missing logging library:"
   echo "  $PTEK_OUTPUT_LIB"
-  # shellcheck disable=SC2317
   return 1 2>/dev/null || exit 1
 fi
 
+# shellcheck source=/dev/null
+source "$PTEK_OUTPUT_LIB"
+
 # ------------------------------------------------------------------------------
-# Helper: appcfg <key>
-# Returns a config value from the PTEKWPCFG dictionary.
+# Accessor: appcfg <key>
 # ------------------------------------------------------------------------------
+
 appcfg() {
   local key="$1"
   if [[ -z "${PTEKWPCFG[$key]+_}" ]]; then
@@ -146,5 +150,9 @@ appcfg() {
   printf '%s\n' "${PTEKWPCFG[$key]}"
 }
 
-# shellcheck source=/dev/null
-source "$PTEK_OUTPUT_LIB"
+# Optional debug helper
+appcfg_dump() {
+  for k in "${!PTEKWPCFG[@]}"; do
+    printf '%s = %s\n' "$k" "${PTEKWPCFG[$k]}"
+  done | sort
+}

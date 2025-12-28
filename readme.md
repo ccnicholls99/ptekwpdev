@@ -154,3 +154,72 @@ For community projects (e.g., fishing co-op, Poker Run), symbolic hostnames (`ma
 ## 📜 License
 
 MIT License – free to use, modify, and distribute.
+
+
+flowchart TD
+
+    %% ============================
+    %% GLOBAL CONFIG (APP LEVEL)
+    %% ============================
+
+    A1[app.json<br/>• app_base<br/>• config_base<br/>• project_base<br/>• backend_network<br/>• database.*<br/>• wordpress_defaults.*] 
+        --> A2[app_config.sh<br/>appcfg accessor]
+
+    A2 --> A3[app_deploy.sh<br/>Global provisioning]
+
+    A3 --> A4[Global Backend Network]
+    A3 --> A5[Global SQLDB Container<br/>ptekwpdev_db]
+    A3 --> A6[Global SQL Admin Container]
+    A3 --> A7[Global Assets Volume<br/>ptekwpdev_assets_volume]
+
+
+    %% ============================
+    %% PROJECT CONFIG (PER PROJECT)
+    %% ============================
+
+    B1[environments.json<br/>projects.{key}<br/>• project_domain<br/>• project_network<br/>• base_dir<br/>• wordpress.*<br/>• secrets.*<br/>• dev_sources.*]
+        --> B2[project_deploy.sh]
+
+    B2 --> B3[derived_json<br/>lowercase merged config]
+
+    B3 --> B4[env.project.tpl]
+    B4 --> B5[.env (project env vars)]
+
+
+    %% ============================
+    %% PROJECT RUNTIME (DOCKER)
+    %% ============================
+
+    B5 --> C1[compose.project.yml]
+
+    C1 --> C2[wp container<br/>WordPress]
+    C1 --> C3[wpcli container]
+    C1 --> C4[proxy container<br/>NGINX]
+
+    C1 --> C5[frontend network<br/>name=${FRONTEND_NETWORK}]
+    C1 --> C6[backend network<br/>name=${BACKEND_NETWORK}]
+
+    C2 --> C6
+    C3 --> C6
+    C4 --> C5
+
+    %% ============================
+    %% DATABASE CONNECTION
+    %% ============================
+
+    C2 -->|SQLDB_HOST| A5
+
+
+    %% ============================
+    %% PROXY ROUTING
+    %% ============================
+
+    C4 -->|server_name ${PROJECT_DOMAIN}| C2
+
+
+    %% ============================
+    %% DEV SOURCES + ASSETS
+    %% ============================
+
+    B2 --> D1[dev_sources deployment<br/>plugins/themes]
+    C2 --> D2[Assets Volume<br/>ptekwpdev_assets_volume]

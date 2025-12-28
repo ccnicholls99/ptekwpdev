@@ -1,18 +1,41 @@
 #!/usr/bin/env bash
+# ================================================================================
+# PTEKWPDEV — a multi-project, bootstrap app for localized WordPress development
+# github: https://github.com/ccnicholls99/ptekwpdev.git
+# ------------------------------------------------------------------------------
+# Script: {{script_name}}
+# Synopsis:
+#   {{synopsis}}
 #
-# Provision script for WordPress dev environments (ptekwpdev)
+# Description:
+#   {{script_description}}
 #
-
+# Notes:
+#   {{optional_notes}}
+#
+# ================================================================================
 set -euo pipefail
 
 APP_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT=""
-CONFIG_BASE="$HOME/.ptekwpdev"
-CONFIG_FILE="$CONFIG_BASE/environments.json"
 WHAT_IF=false
 ACTION=""
 
-LOGFILE="$APP_BASE/logs/deploy_project.log"
+# Load app-level configuration
+APP_CONFIG="$APP_BASE/lib/app_config.sh"
+if [[ ! -f "$APP_CONFIG" ]]; then
+  echo "ERROR: Missing app_config.sh at $APP_CONFIG"
+  exit 1
+fi
+
+# shellcheck source=/dev/null
+source "$APP_CONFIG"
+
+# Now that app_config is loaded:
+CONFIG_BASE="$(appcfg config_base)"
+CONFIG_FILE="$CONFIG_BASE/environments.json"
+
+LOGFILE="$APP_BASE/logs/project_deploy.log"
 
 # Load helpers
 source "$APP_BASE/lib/output.sh"
@@ -91,24 +114,22 @@ parse_options() {
 resolve_project() {
   [[ ! -f "$CONFIG_FILE" ]] && { error "No project config at $CONFIG_FILE"; exit 1; }
 
-  APP_PROJECT_BASE=$(jq -r '.app.project_base' "$CONFIG_FILE" | sed "s|\$HOME|$HOME|")
-  PROJECT_CONFIG=$(jq -r --arg pr "$PROJECT" '.environments[$pr]' "$CONFIG_FILE")
+  PROJECT_CONFIG=$(jq -r --arg pr "$PROJECT" '.projects[$pr]' "$CONFIG_FILE")
 
-  HOST_DOMAIN=$(echo "$PROJECT_CONFIG" | jq -r '.project_domain // empty')
-  BASE_DIR_REL=$(echo "$PROJECT_CONFIG" | jq -r '.base_dir // empty' | sed 's|^/||')
+  HOST_DOMAIN=$(echo "$PROJECT_CONFIG" | jq -r '.project_domain')
+  BASE_DIR_REL=$(echo "$PROJECT_CONFIG" | jq -r '.base_dir' | sed 's|^/||')
+
+  APP_PROJECT_BASE="$(appcfg project_base)"
   PROJECT_BASE="$APP_PROJECT_BASE/$BASE_DIR_REL"
 
-  [[ -z "$BASE_DIR_REL" || -z "$HOST_DOMAIN" ]] && { error "Project '$PROJECT' missing base_dir or project_domain"; exit 1; }
-
-  WORDPRESS_IMAGE=$(echo "$PROJECT_CONFIG" | jq -r '.wordpress_image // empty')
-  WORDPRESS_SSL_PORT=$(echo "$PROJECT_CONFIG" | jq -r '.wordpress_ssl_port // empty')
+  WORDPRESS_IMAGE=$(echo "$PROJECT_CONFIG" | jq -r '.wordpress.image')
+  WORDPRESS_SSL_PORT=$(echo "$PROJECT_CONFIG" | jq -r '.wordpress.ssl_port')
 
   LOG_DIR="$PROJECT_BASE/app/logs"
   ensure_dir "$LOG_DIR"
-  LOGFILE="$LOG_DIR/provision.log"
+  LOGFILE="$LOG_DIR/project_deploy.log"
   export LOGFILE
   log_header "Provision: $PROJECT"
-  #exec > >(tee -a "$LOGFILE") 2>&1
 
   info "Resolved project: $PROJECT_BASE (domain=$HOST_DOMAIN)"
 }
@@ -142,8 +163,7 @@ generate_env_file() {
   project_json=$(jq -r --arg pr "$PROJECT" '.environments[$pr]' "$CONFIG_FILE")
 
   local app_network
-  app_network=$(jq -r '.app.backend_network' "$CONFIG_FILE")
-
+  app_network="$(appcfg backend_network)"
 
   # --------------------------------------------------------------------
   # Build derived values that are NOT stored in environments.json
@@ -152,7 +172,6 @@ generate_env_file() {
     --arg project_name "$PROJECT" \
     --arg project_domain "$HOST_DOMAIN" \
     --arg app_base "$APP_BASE" \
-    --arg build_home "$APP_BASE" \
     --arg project_base "$PROJECT_BASE" \
     --arg wordpress_image "$WORDPRESS_IMAGE" \
     --arg wordpress_ssl_port "$WORDPRESS_SSL_PORT" \
@@ -161,7 +180,6 @@ generate_env_file() {
       project_name: $project_name,
       project_domain: $project_domain,
       app_base: $app_base,
-      build_home: $build_home,
       project_base: $project_base,
       wordpress_image: $wordpress_image,
       wordpress_ssl_port: $wordpress_ssl_port,

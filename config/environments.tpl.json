@@ -1,38 +1,22 @@
 {
-  "app": {
-    "build_home": "{{app_base}}",
-    "project_base": "{{project_base}}",
-    "backend_network": "ptekwpdev_backend",
-
-    "sqldb_port": "3306",
-    "sqldb_image": "mariadb:10.11",
-    "sqldb_version": "10.5",
-
-    "sqladmin_image": "phpmyadmin/phpmyadmin",
-    "sqladmin_version": "latest",
-    "sqladmin_port": "5211",
-
-    "secrets": {
-      "sqldb_root": "root",
-      "sqldb_root_pass": "ChangeMe1!"
-    }
-  },
-
-  "environments": {
-    "__PROJECT_KEY__": {
+  "projects": {
+    "{{project_key}}": {
       "project_name": "{{project_name}}",
       "project_title": "{{project_title}}",
-      "description": "{{project_description}}",
+      "project_description": "{{project_description}}",
 
-      "base_dir": "ptekdemo",
+      "base_dir": "{{ptekdemo}}",
+
       "project_domain": "{{project_name}}.dev",
       "project_network": "{{project_name}}_frontend",
 
-      "wordpress_image": "php8.1",
-      "wordpress_version": "latest",
-      "wordpress_port": "80",
-      "wordpress_ssl_port": "443",
-      "wordpress_host": "{{project_name}}_wp",
+      "wordpress": {
+        "image": "php8.1",
+        "version": "latest",
+        "port": "80",
+        "ssl_port": "443",
+        "host": "{{project_name}}_wp"
+      },
 
       "secrets": {
         "sqldb_name": "{{project_name}}db",
@@ -43,31 +27,32 @@
         "wp_admin_email": "admin@{{project_name}}.dev",
         "jwt_secret": "1234567890!@#$%^&*()"
       },
+
       "dev_sources": {
         "themes": [
-          { 
-            "name": "mytheme", 
-            "source": "/home/craig/dev/mytheme", 
+          {
+            "name": "mytheme",
+            "source": "/home/craig/dev/mytheme",
             "type": "local",
-            "init_git": false 
+            "init_git": false
           },
-          { 
-            "name": "remotetheme", 
-            "source": "https://github.com/org/theme.git", 
-            "type": "git" 
+          {
+            "name": "remotetheme",
+            "source": "https://github.com/org/theme.git",
+            "type": "git"
           }
         ],
         "plugins": [
-          { 
-            "name": "myplugin", 
-            "source": "/home/craig/dev/myplugin", 
+          {
+            "name": "myplugin",
+            "source": "/home/craig/dev/myplugin",
             "type": "local",
-            "init_git": false 
+            "init_git": false
           },
-          { 
-            "name": "remoteplugin", 
-            "source": "git@github.com:org/plugin.git", 
-            "type": "git" 
+          {
+            "name": "remoteplugin",
+            "source": "git@github.com:org/plugin.git",
+            "type": "git"
           }
         ]
       }

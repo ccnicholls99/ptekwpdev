@@ -9,10 +9,10 @@ services:
         WORDPRESS_IMAGE: ${WORDPRESS_IMAGE}
     container_name: ${PROJECT_NAME}_wp
     environment:
-      WORDPRESS_DB_HOST: ptekwpdev_db
+      WORDPRESS_DB_HOST: ${SQLDB_HOST}
       WORDPRESS_DB_USER: ${SQLDB_USER}
       WORDPRESS_DB_PASSWORD: ${SQLDB_PASSWORD}
-      WORDPRESS_DB_NAME: ${PROJECT_NAME}_db
+      WORDPRESS_DB_NAME: ${SQLDB_NAME}
     volumes:
       #- ${PROJECT_BASE}/wordpress:/var/www/html/wp-content
       - ptekwpdev_assets_volume:/var/www/html/wp-content
