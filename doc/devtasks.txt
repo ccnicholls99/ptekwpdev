@@ -1,0 +1,26 @@
+# ==============================================================================
+#  PTEKWPDEV — Developer Tasks / TODO
+#  File: cp_devtasks.txt
+#
+#  Purpose:
+#    Centralized list of outstanding development tasks for the PTEKWPDEV
+#    platform. These tasks are architectural, tooling, or contributor‑experience
+#    improvements that should be implemented in upcoming iterations.
+#
+#  Notes:
+#    - This file is intentionally simple and text‑based.
+#    - Tasks should be explicit, actionable, and contributor‑safe.
+# ==============================================================================
+
+[ ] Add Makefile targets for dev_sources
+      - Targets should wrap project_dev_sources.sh
+      - Include: add-dev-plugin, add-dev-theme, list-dev-sources (future)
+
+[ ] Add validation tooling for dev_sources
+      - Validate local paths exist
+      - Validate remote git URLs are reachable
+      - Validate type=local|remote
+      - Validate init_git is boolean
+      - Add a project_dev_sources.sh --validate action
+
+# Add new tasks below this line

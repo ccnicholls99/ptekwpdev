@@ -1,180 +1,231 @@
 #!/usr/bin/env bash
-# ================================================================================
-# PTEKWPDEV — a multi-project, bootstrap app for localized WordPress development
-# github: https://github.com/ccnicholls99/ptekwpdev.git
-# ------------------------------------------------------------------------------
-# Script: project_launch.sh
-# Synopsis:
-#   Runtime orchestration for project containers
+# ==============================================================================
+#  PTEKWPDEV — Project Launch Script
+#  Script: project_launch.sh
+#  Synopsis:
+#    Manage Docker lifecycle actions for a single project.
 #
-# Description:
-#   Handles up, down, status, logs, and refresh actions for project Docker stack
+#  Description:
+#    This script loads project configuration from CONFIG_BASE/config/projects.json,
+#    resolves the project repo, and performs runtime Docker actions such as
+#    start, stop, restart, status, logs, and refresh.
 #
-# Notes:
-#   Executed from APP_BASE/bin/project_launch.sh
-#   Reads project config from environments.json
-#   Pre-Req: APP_BASE/bin/project_deploy.sh
-#
-# ================================================================================
-set -euo pipefail
+#  Notes:
+#    - Must be executed from APP_BASE/bin
+#    - Reads ONLY from CONFIG_BASE
+#    - Never performs provisioning (that is project_deploy.sh)
+# ==============================================================================
 
-# ------------------------------------------------------------
-# Insert canonical script header (line 2)
-# ------------------------------------------------------------
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# ------------------------------------------------------------------------------
+# Preserve caller directory
+# ------------------------------------------------------------------------------
+
+PTEK_CALLER_PWD="$(pwd)"
+ptekwp_cleanup() {
+  cd "$PTEK_CALLER_PWD" || true
+}
+trap ptekwp_cleanup EXIT
+
+# ------------------------------------------------------------------------------
+# Load app config + logging
+# ------------------------------------------------------------------------------
+
 APP_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# ------------------------------------------------------------
-# Load logging + helpers
-# ------------------------------------------------------------
+# shellcheck source=/dev/null
+source "${APP_BASE}/lib/app_config.sh"
 source "${APP_BASE}/lib/output.sh"
 source "${APP_BASE}/lib/helpers.sh"
+source "${APP_BASE}/lib/project_config.sh"
 
-CONFIG_BASE="${HOME}/.ptekwpdev"
-ENVIRONMENTS_JSON="${CONFIG_BASE}/environments.json"
+set_log --truncate "$(appcfg app_log_dir)/project_launch.log" \
+  "=== Project Launch Run ($(date)) ==="
 
-PROJECT_KEY=""
+# ------------------------------------------------------------------------------
+# Resolve config values
+# ------------------------------------------------------------------------------
+
+CONFIG_BASE="$(appcfg config_base)"
+PROJECT_BASE="$(appcfg project_base)"
+
+CONFIG_CONFIG_DIR="${CONFIG_BASE}/config"
+
+PROJECT=""
 ACTION=""
 WHAT_IF=false
 
+# ------------------------------------------------------------------------------
+# Usage
+# ------------------------------------------------------------------------------
+
 usage() {
-  echo "Usage: $0 -p <project> -a <action>"
-  echo ""
-  echo "Actions:"
-  echo "  up        Start containers"
-  echo "  down      Stop and remove containers"
-  echo "  status    Show container status"
-  echo "  logs      Show logs"
-  echo "  refresh   Restart stack (down → up)"
-  echo ""
-  echo "Options:"
-  echo "  -p, --project <key>   Project key from environments.json"
-  echo "  -a, --action <action> One of: up, down, status, logs, refresh"
-  echo "  -w, --what-if         Dry run"
-  echo "  -h, --help            Show help"
-  exit 1
+  cat <<EOF
+Usage: project_launch.sh -p <project_key> -a {start|stop|restart|status|logs|refresh} [-w]
+
+Actions:
+  start     Start project containers
+  stop      Stop project containers
+  restart   Stop then start project containers
+  status    Show container status
+  logs      Show container logs
+  refresh   Down + Up (safe refresh)
+EOF
 }
 
-# ------------------------------------------------------------
-# Parse args
-# ------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# Parse flags
+# ------------------------------------------------------------------------------
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -p|--project) PROJECT_KEY="$2"; shift 2 ;;
-    -a|--action)  ACTION="$2"; shift 2 ;;
+    -p|--project) PROJECT="$2"; shift 2 ;;
+    -a|--action) ACTION="$2"; shift 2 ;;
     -w|--what-if) WHAT_IF=true; shift ;;
-    -h|--help)    usage ;;
-    *)            error "Unknown option: $1"; usage ;;
+    -h|--help) usage; exit 0 ;;
+    *) error "Unknown option: $1"; exit 1 ;;
   esac
 done
 
-if [[ -z "$PROJECT_KEY" ]]; then
-  error "Missing required --project option"
+if [[ -z "${PROJECT:-}" ]]; then
+  error "Missing required --project <key>"
   usage
+  exit 1
 fi
 
-if [[ -z "$ACTION" ]]; then
-  error "Missing required --action option"
+if [[ -z "${ACTION:-}" ]]; then
+  error "Missing required --action"
   usage
-fi
-
-# ------------------------------------------------------------
-# Load project config
-# ------------------------------------------------------------
-info "Loading configuration for project: $PROJECT_KEY"
-
-# ------------------------------------------------------------
-# Load project config
-# ------------------------------------------------------------
-info "Loading configuration for project: $PROJECT_KEY"
-
-if [[ ! -f "$ENVIRONMENTS_JSON" ]]; then
-  error "environments.json not found at $ENVIRONMENTS_JSON"
   exit 1
 fi
 
-# Global app project base
-GLOBAL_PROJECT_BASE=$(jq -r '.app.project_base' "$ENVIRONMENTS_JSON")
+# ------------------------------------------------------------------------------
+# Load project configuration
+# ------------------------------------------------------------------------------
 
-if [[ -z "$GLOBAL_PROJECT_BASE" || "$GLOBAL_PROJECT_BASE" == "null" ]]; then
-  error "Missing app.project_base in $ENVIRONMENTS_JSON"
+PROJECTS_FILE="${CONFIG_CONFIG_DIR}/projects.json"
+
+if [[ ! -f "$PROJECTS_FILE" ]]; then
+  error "Missing projects.json at ${PROJECTS_FILE}"
   exit 1
 fi
 
-# Per-project base_dir
-PROJECT_BASE_DIR=$(jq -r --arg p "$PROJECT_KEY" '.environments[$p].base_dir' "$ENVIRONMENTS_JSON")
+project_config_load "$PROJECT"
 
-if [[ -z "$PROJECT_BASE_DIR" || "$PROJECT_BASE_DIR" == "null" ]]; then
-  error "Missing environments[\"$PROJECT_KEY\"].base_dir in $ENVIRONMENTS_JSON"
+PROJECT_REPO="$(prcfg project_repo)"
+
+if [[ -z "$PROJECT_REPO" ]]; then
+  error "project_repo not resolved for project '${PROJECT}'"
   exit 1
 fi
 
-PROJECT_BASE="${GLOBAL_PROJECT_BASE}/${PROJECT_BASE_DIR}"
+COMPOSE_FILE="${PROJECT_REPO}/docker/compose.project.yml"
+ENV_FILE="${PROJECT_REPO}/docker/.env"
 
-info "Resolved PROJECT_BASE: $PROJECT_BASE"
+# ------------------------------------------------------------------------------
+# Validate runtime files
+# ------------------------------------------------------------------------------
 
-# ------------------------------------------------------------
-# Initialize project logging
-# ------------------------------------------------------------
-LOG_DIR="${PROJECT_BASE}/app/logs"
-mkdir -p "$LOG_DIR"
+validate_runtime() {
+  if [[ ! -f "$COMPOSE_FILE" ]]; then
+    error "Missing compose.project.yml at ${COMPOSE_FILE}"
+    exit 1
+  fi
 
-set_log --truncate "${LOG_DIR}/launch.log" "+--- Project Launch Begins ---+"
-
-success "Logging initialized at ${LOG_DIR}/launch.log"
-
-# ------------------------------------------------------------
-# Docker compose file
-# ------------------------------------------------------------
-COMPOSE_FILE="${APP_BASE}/docker/compose.project.yml"
-
-run_or_preview() {
-  local msg="$1"
-  shift
-  if $WHAT_IF; then
-    warn "[WHAT-IF] $msg"
-    warn "[WHAT-IF] Command: $*"
-  else
-    info "$msg"
-    "$@"
+  if [[ ! -f "$ENV_FILE" ]]; then
+    error "Missing .env at ${ENV_FILE}"
+    exit 1
   fi
 }
 
-# ------------------------------------------------------------
-# Action handlers
-# ------------------------------------------------------------
-case "$ACTION" in
+# ------------------------------------------------------------------------------
+# Docker actions
+# ------------------------------------------------------------------------------
 
-  up)
-    run_or_preview "Starting project containers" \
-      docker compose -f "$COMPOSE_FILE" up -d
-    ;;
+start_containers() {
+  validate_runtime
 
-  down)
-    run_or_preview "Stopping project containers" \
-      docker compose -f "$COMPOSE_FILE" down
-    ;;
+  if $WHAT_IF; then
+    whatif "Would start containers for project '${PROJECT}'"
+    return
+  fi
 
-  status)
-    run_or_preview "Showing container status" \
-      docker compose -f "$COMPOSE_FILE" ps
-    ;;
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+  success "Project containers started"
+}
 
-  logs)
-    run_or_preview "Showing container logs" \
-      docker compose -f "$COMPOSE_FILE" logs -f
-    ;;
+stop_containers() {
+  validate_runtime
 
-  refresh)
-    run_or_preview "Refreshing project containers (down → up)" \
-      docker compose -f "$COMPOSE_FILE" down
-    run_or_preview "Starting containers" \
-      docker compose -f "$COMPOSE_FILE" up -d
-    ;;
+  if $WHAT_IF; then
+    whatif "Would stop containers for project '${PROJECT}'"
+    return
+  fi
 
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down
+  success "Project containers stopped"
+}
+
+restart_containers() {
+  stop_containers
+  start_containers
+}
+
+status_containers() {
+  validate_runtime
+
+  if $WHAT_IF; then
+    whatif "Would show status for project '${PROJECT}'"
+    return
+  fi
+
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
+}
+
+logs_containers() {
+  validate_runtime
+
+  if $WHAT_IF; then
+    whatif "Would show logs for project '${PROJECT}'"
+    return
+  fi
+
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs -f
+}
+
+refresh_containers() {
+  validate_runtime
+
+  if $WHAT_IF; then
+    whatif "Would refresh containers (down + up) for project '${PROJECT}'"
+    return
+  fi
+
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+
+  success "Project containers refreshed"
+}
+
+# ------------------------------------------------------------------------------
+# Dispatcher
+# ------------------------------------------------------------------------------
+
+case "${ACTION}" in
+  start)   start_containers ;;
+  stop)    stop_containers ;;
+  restart) restart_containers ;;
+  status)  status_containers ;;
+  logs)    logs_containers ;;
+  refresh) refresh_containers ;;
   *)
-    error "Unknown action: $ACTION"
+    error "Unknown action: ${ACTION}"
     usage
+    exit 1
     ;;
 esac
 
-success "Action '$ACTION' completed for project '$PROJECT_KEY'"
+exit 0
