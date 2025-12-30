@@ -341,9 +341,4 @@ This is where the project becomes real:
 - project‑level `docker-compose.yml` generated  
 - containers started  
 
-If you want, I can generate the next lifecycle section **and** review your `project_deploy.sh` to ensure it fits the architecture.
-
-Just say:
-
-**“Continue with project_deploy section”**
 
