@@ -58,3 +58,85 @@ Before beginning, ensure no previous runtime state exists (see assumptions).
 Commands:
     rm -rf $HOME/.ptekwpdev
     rm -rf $HOME/ptekwpdev_repo
+
+# **1. Run `app_bootstrap.sh`**
+
+This is the first real action in the lifecycle, and now that your bootstrap script is stable, we can document it cleanly and confidently.
+
+Below is a polished continuation you can drop directly into `lifecycle.md`.  
+It follows the tone and structure you’ve already established.
+
+---
+
+# **1. Run `app_bootstrap.sh`**
+
+With a clean slate confirmed, initialize the application environment.  
+This step creates all required directories, generates secrets, and writes the global `app.json` configuration.
+
+### **Command**
+
+```bash
+cd $HOME/projects/ptekwpdev/bin
+./app_bootstrap.sh -f
+```
+
+### **Expected Output (annotated)**
+
+```
+[SUCCESS] Logfile set to: .../app/logs/app_bootstrap.log
+[INFO] Preparing directory structure...
+[INFO] Ensured: $APP_BASE/app/config
+[INFO] Ensured: $CONFIG_BASE
+[INFO] Ensured: $CONFIG_BASE/config
+[INFO] Ensured: $PROJECT_BASE
+[INFO] Ensured: $PROJECT_BASE/wordpress
+[INFO] Ensured: $PROJECT_BASE/src
+[INFO] Ensured: $PROJECT_BASE/src/plugins
+[INFO] Ensured: $PROJECT_BASE/src/themes
+[INFO] Directory scaffolding complete.
+
+[INFO] Generating secrets key values...
+[SUCCESS] Secrets key values created
+
+[INFO] Generating app.json → $APP_BASE/app/config/app.json
+[SUCCESS] Wrote app.json → $APP_BASE/app/config/app.json
+
+[SUCCESS] CONFIG_BASE initialized at $CONFIG_BASE/config/app.json
+[SUCCESS] App bootstrap complete.
+```
+
+### **What This Step Does**
+
+- Creates all required app‑level and project‑level directories  
+- Generates deterministic, ASCII‑safe secrets  
+- Writes `app.json` to both:
+  - `$APP_BASE/app/config/app.json` (source of truth)
+  - `$CONFIG_BASE/config/app.json` (runtime copy)
+- Initializes the global configuration directory  
+- Prepares the environment for project creation and deployment  
+
+### **Artifacts Created**
+
+| Path | Description |
+|------|-------------|
+| `$APP_BASE/app/config/app.json` | Canonical app‑level configuration |
+| `$CONFIG_BASE/config/app.json` | Runtime copy used by all scripts |
+| `$PROJECT_BASE/` | Root directory for all projects |
+| `$PROJECT_BASE/src/plugins` | Dev‑source plugin workspace |
+| `$PROJECT_BASE/src/themes` | Dev‑source theme workspace |
+| `$PROJECT_BASE/wordpress` | WordPress core directory (populated later) |
+
+---
+
+# **Next Step: 2. Run `app_deploy.sh`**
+
+This is the next major milestone in the lifecycle test.
+
+`app_deploy.sh` will:
+
+- Ensure `projects.json` exists  
+- Initialize runtime state  
+- Prepare the environment for project creation  
+- Optionally register the demo project  
+
+
