@@ -192,15 +192,158 @@ At this point:
 
 ---
 
-# **Next Step: 3. Create a Project (`project_create.sh`)**
+Craig — this is excellent.  
+Your `project_create.sh` is already clean, modular, and aligned with the architecture we’ve been building. It’s doing exactly what a **pure metadata creation** script should do:
 
-This is the next major milestone in the lifecycle.
+- hybrid input (flags override, missing values prompt)  
+- strict validation  
+- deterministic secret generation  
+- JSON‑safe insertion into `projects.json`  
+- optional dev‑source provisioning  
+- optional project deployment  
+- WHAT‑IF safety  
+- no provisioning, no filesystem writes outside CONFIG_BASE  
 
-`project_create.sh` will:
+This is exactly the right shape.
 
-- create a new project directory under `$PROJECT_BASE`  
-- scaffold project‑level config  
-- generate project‑level `.env`  
-- generate `compose.project.yml`  
-- register the project in `projects.json`  
-- prepare the project for launch  
+Now let’s fold this into **lifecycle.md** so the full workflow flows naturally:
+
+- **0. Clean Slate**  
+- **1. app_bootstrap.sh**  
+- **2. app_deploy.sh**  
+- **3. project_create.sh** ← *this is the next section we add*  
+- **4. project_deploy.sh**  
+- **5. project_launch.sh**  
+
+Below is a polished, contributor‑friendly section you can drop directly into your lifecycle document.
+
+---
+
+# **3. Create a Project (`project_create.sh`)**
+
+With the app environment deployed and core containers online, the next step is to create a project entry in the global project registry (`projects.json`).  
+This step **does not** provision files, containers, or WordPress — it only creates metadata.
+
+### **Command**
+
+```bash
+cd $HOME/projects/ptekwpdev/bin
+./project_create.sh
+```
+
+If you prefer to skip prompts:
+
+```bash
+./project_create.sh \
+  --project demo \
+  --domain demo.local \
+  --network ptekwpdev_demo_net \
+  --base-dir demo \
+  --port 8080 \
+  --ssl-port 8443
+```
+
+### **Expected Interactive Prompts**
+
+```
+Enter project key: demo
+Enter project domain: demo.local
+Enter project network: ptekwpdev_demo_net
+Enter base directory under PROJECT_BASE: demo
+Enter WordPress HTTP port [8080]:
+Enter WordPress HTTPS port [8443]:
+```
+
+### **Expected Output (annotated)**
+
+```
+[INFO] Adding project 'demo' to projects.json
+[SUCCESS] Project 'demo' added to projects.json
+
+Add dev sources now? (y/n):
+Deploy project now? (y/n):
+[SUCCESS] Project creation complete
+```
+
+### **What This Step Does**
+
+`project_create.sh` performs **pure metadata creation**:
+
+- Validates the project key  
+- Ensures the project does not already exist  
+- Generates database + WordPress admin secrets  
+- Constructs a project metadata block  
+- Inserts it into:
+
+```
+$CONFIG_BASE/config/projects.json
+```
+
+- Optionally forwards dev‑source flags to `project_dev_sources.sh`  
+- Optionally triggers `project_deploy.sh`  
+
+### **Artifacts Created**
+
+| Path | Description |
+|------|-------------|
+| `$CONFIG_BASE/config/projects.json` | Updated with a new project entry |
+| (optional) dev‑source entries | If added via flags or interactive mode |
+
+### **Example `projects.json` After Creation**
+
+```json
+{
+  "projects": {
+    "demo": {
+      "project_domain": "demo.local",
+      "project_network": "ptekwpdev_demo_net",
+      "base_dir": "demo",
+      "wordpress": {
+        "port": "8080",
+        "ssl_port": "8443"
+      },
+      "secrets": {
+        "sqldb_name": "demo_db",
+        "sqldb_user": "demo_user",
+        "sqldb_pass": "********",
+        "wp_admin_user": "admin",
+        "wp_admin_pass": "********",
+        "wp_admin_email": "admin@demo.local"
+      },
+      "dev_sources": {
+        "plugins": {},
+        "themes": {}
+      }
+    }
+  }
+}
+```
+
+### **State After This Step**
+
+At this point:
+
+- The project exists in the global registry  
+- All metadata is ready for provisioning  
+- No files or containers have been created yet  
+- The system is ready for **project deployment**  
+
+---
+
+# **Next Step: 4. Deploy the Project (`project_deploy.sh`)**
+
+This is where the project becomes real:
+
+- directories created under `$PROJECT_BASE`  
+- WordPress core copied  
+- dev sources linked  
+- project‑level `.env` generated  
+- project‑level `docker-compose.yml` generated  
+- containers started  
+
+If you want, I can generate the next lifecycle section **and** review your `project_deploy.sh` to ensure it fits the architecture.
+
+Just say:
+
+**“Continue with project_deploy section”**
+
