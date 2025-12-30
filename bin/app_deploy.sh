@@ -19,8 +19,9 @@
 #  Notes:
 #    - Must be executed from PTEK_APP_BASE/bin
 #    - Uses PTEKWPCFG + appcfg() for all app-level settings
-#    - projects.json contains ONLY runtime + project-level settings
-#    - No app-level secrets or constants are written to projects.json
+#    - projects.json is generated from projects.tpl.json
+#    - app_deploy does NOT insert any project metadata
+#    - project_create is responsible for adding projects to projects.json
 # ==============================================================================
 
 set -o errexit
@@ -119,6 +120,13 @@ generate_projects_json() {
   mkdir -p "$(dirname "$PROJECTS_OUT")"
 
   # Copy template as-is
+  # If projects.json already exists, do NOT overwrite it
+  if [[ -f "$PROJECTS_OUT" ]]; then
+    info "projects.json already exists — preserving existing project metadata"
+    return
+  fi
+
+  info "projects.json not found — generating from template"
   cp "${PROJECTS_TPL}" "${PROJECTS_OUT}"
 
   # Validate JSON
@@ -128,59 +136,6 @@ generate_projects_json() {
   fi
 
   success "projects.json created"
-}
-
-# ------------------------------------------------------------------------------
-# Initialize demo project in projects.json
-# ------------------------------------------------------------------------------
-
-initialize_demo_project() {
-  info "Initializing demo project in ${PROJECTS_OUT}"
-
-  if $WHAT_IF; then
-    whatif "Would overwrite ${PROJECTS_OUT} with a demo project definition"
-    return
-  fi
-
-  mkdir -p "$(dirname "$PROJECTS_OUT")"
-
-  jq -n '
-    {
-      projects: {
-        demo: {
-          project_domain: "demo.local",
-          project_network: "ptekwpdev_demo_net",
-          base_dir: "demo",
-          wordpress: {
-            image: "wordpress:latest",
-            host: "demo.local",
-            port: 8080,
-            ssl_port: 8443
-          },
-          secrets: {
-            sqldb_name: "demo_db",
-            sqldb_user: "demo_user",
-            sqldb_pass: "demo_pass",
-            wp_admin_user: "admin",
-            wp_admin_email: "admin@demo.local",
-            wp_admin_pass: "password"
-          },
-          dev_sources: {
-            plugins: [],
-            themes: []
-          }
-        }
-      }
-    }
-  ' > "${PROJECTS_OUT}"
-
-  # Validate JSON again
-  if ! jq empty "${PROJECTS_OUT}" >/dev/null 2>&1; then
-    error "Initialized projects.json is invalid JSON"
-    exit 1
-  fi
-
-  success "Demo project initialized in projects.json"
 }
 
 # ------------------------------------------------------------------------------
@@ -366,7 +321,6 @@ reset_containers() {
 case "${ACTION:-}" in
   init)
     generate_projects_json
-    initialize_demo_project
     deploy_env_templates
     deploy_docker_templates
     deploy_container_configs

@@ -23,4 +23,71 @@
       - Validate init_git is boolean
       - Add a project_dev_sources.sh --validate action
 
+[ ] Convert PROJECT_BASE into a git repo and initialize each dev_source as a child git repo
+      - Initialize PROJECT_REPO with git init during project_create
+      - Initialize each dev_source directory as its own git repo during provisioning
+      - For remote dev_sources:
+            - If init_git=true, keep upstream .git
+            - If init_git=false, strip .git and re-init as local repo
+      - Add .gitignore templates for project repos and dev_source repos
+      - Evaluate whether nested repos or submodules best fit long-term architecture
+      
+[ ] Integrate project_create and project_dev_sources into the demo lifecycle
+      - project_create should detect demo and explain its role
+      - project_dev_sources should offer template sources for demo
+      - README should show full lifecycle including both tools
+      - Ensure demo remains metadata-only until contributor runs lifecycle
+      - demo project.json values in app_base/docs/cp_demo_projects.json
+
+[ ] Update app_deploy to generate projects.json with empty "projects" node
+      - Remove demo project initialization
+      - Ensure no auto-insertion of demo metadata
+      - Confirm project_create is now required for demo lifecycle
+
+[X] Confirm app_deploy no longer inserts demo metadata
+      - projects.json must contain only { "projects": {} }
+      - demo project must be created manually via project_create
+
+[ ] Improve app_deploy projects.json preservation logic
+      - Current rule: do not overwrite if projects.json exists
+      - Future rule: validate JSON structure before deciding to preserve
+      - Regenerate only if:
+            * file is missing
+            * file is invalid JSON
+            * file is missing required keys
+            * schema version mismatch (future)
+      - Preserve contributor-created metadata in all other cases
+
+[X] Confirm project_create.sh treats demo like any other project
+      - No special-case logic required
+      - Demo must be created manually by contributors
+      - Demo lifecycle remains fully explicit and hands-on
+
+[ ] Add support for safe shell-style path expansion in app_config.sh
+      - Allow $HOME and ~ expansion
+      - Ensure expansion happens only for known path keys
+      - Validate expanded paths are absolute
+      - Preserve contributor safety (no eval of arbitrary content)
+      - Add schema validation to reject unsupported patterns
+
+[ ] Upgrade app_bootstrap.sh to accept arguments or prompt for config_base and project_base
+      - Support flags: --config-base <path>, --project-base <path>
+      - Support interactive prompts when values are missing
+      - Validate that both paths are absolute (no $HOME, no ~)
+      - Create directories only after confirmation
+      - Write updated values into APP_BASE/app/config/app.json before copying to CONFIG_BASE
+      - Ensure WHAT-IF mode is supported for safety
+      - Update lifecycle documentation once implemented
+
+[ ] Reinstate JSON Schema validation for app.json
+      - Current validation disabled due to Ajv meta-schema fetch failures.
+      - Requires offline-safe, deterministic validation using locally bundled Draft-07 meta-schema.
+      - Steps:
+            1. Bundle draft-07 meta-schema under app/config/schema/meta/
+            2. Update validate_schema() to use --strict=false or --meta=false
+            3. Ensure Ajv never fetches remote schemas (no network dependency)
+            4. Re-enable validate_schema "$json_content" in write_app_json()
+      - Priority: Medium (bootstrap works without it)
+      - Owner: Craig
+      
 # Add new tasks below this line

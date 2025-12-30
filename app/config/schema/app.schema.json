@@ -1,0 +1,95 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "app.schema.json",
+  "title": "ptekwpdev app.json schema",
+  "type": "object",
+
+  "required": [
+    "app_key",
+    "app_base",
+    "config_base",
+    "project_base",
+    "backend_network",
+    "secrets",
+    "database",
+    "assets",
+    "wordpress_defaults"
+  ],
+
+  "properties": {
+    "app_key": {
+      "type": "string"
+    },
+
+    "app_base": {
+      "type": "string"
+    },
+
+    "config_base": {
+      "type": "string"
+    },
+
+    "project_base": {
+      "type": "string"
+    },
+
+    "backend_network": {
+      "type": "string"
+    },
+
+    "secrets": {
+      "type": "object",
+      "required": ["sqldb_root", "sqldb_root_pass"],
+      "properties": {
+        "sqldb_root": { "type": "string" },
+        "sqldb_root_pass": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "database": {
+      "type": "object",
+      "required": [
+        "sqldb_port",
+        "sqldb_image",
+        "sqldb_version",
+        "sqladmin_image",
+        "sqladmin_version",
+        "sqladmin_port"
+      ],
+      "properties": {
+        "sqldb_port": { "type": "string" },
+        "sqldb_image": { "type": "string" },
+        "sqldb_version": { "type": "string" },
+        "sqladmin_image": { "type": "string" },
+        "sqladmin_version": { "type": "string" },
+        "sqladmin_port": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "assets": {
+      "type": "object",
+      "required": ["container", "root_path"],
+      "properties": {
+        "container": { "type": "string" },
+        "root_path": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "wordpress_defaults": {
+      "type": "object",
+      "required": ["image", "php_version", "port", "ssl_port"],
+      "properties": {
+        "image": { "type": "string" },
+        "php_version": { "type": "string" },
+        "port": { "type": "integer" },
+        "ssl_port": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+
+  "additionalProperties": false
+}

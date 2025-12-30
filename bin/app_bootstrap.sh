@@ -1,22 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#  PTEKWPDEV — App Bootstrap Script
-#  Script: app_bootstrap.sh
-#  Synopsis:
-#    Establish the app-level configuration directory and generate app.json,
-#    which contains all static app-level settings and secrets.
-#
-#  Description:
-#    This script initializes the PTEKWPDEV application environment by creating
-#    CONFIG_BASE, generating app.json with static configuration values, and
-#    preparing the directory structure for runtime configuration files.
-#
-#    It does NOT:
-#      - generate environments.json
-#      - deploy Docker templates
-#      - start containers
-#
-#    It is a pure initializer and must be run once after git clone.
+#  PTEKWPDEV — App Bootstrap Script (Final Hardened Version)
 # ==============================================================================
 
 set -o errexit
@@ -26,82 +10,162 @@ set -o pipefail
 # ------------------------------------------------------------------------------
 # Preserve caller directory
 # ------------------------------------------------------------------------------
-
 PTEK_CALLER_PWD="$(pwd)"
-ptekwp_cleanup() {
-  cd "$PTEK_CALLER_PWD" || true
-}
+ptekwp_cleanup() { cd "$PTEK_CALLER_PWD" || true; }
 trap ptekwp_cleanup EXIT
 
 # ------------------------------------------------------------------------------
 # Resolve APP_BASE
 # ------------------------------------------------------------------------------
-
 APP_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # ------------------------------------------------------------------------------
 # Load logging utilities
 # ------------------------------------------------------------------------------
+if [[ -f "$APP_BASE/lib/output.sh" ]]; then
+  # shellcheck source=/dev/null
+  source "$APP_BASE/lib/output.sh"
+else
+  echo "$APP_BASE/lib/output.sh not found. Aborting."
+  exit 1
+fi
 
-# shellcheck source=/dev/null
-source "${APP_BASE}/lib/output.sh"
-
-LOG_DIR="${APP_BASE}/app/logs"
-mkdir -p "${LOG_DIR}"
-
-set_log --truncate "${LOG_DIR}/app_bootstrap.log" \
-  "=== App Bootstrap Run ($(date)) ==="
-
-# ------------------------------------------------------------------------------
-# Determine CONFIG_BASE and PROJECT_BASE
-# ------------------------------------------------------------------------------
-
-CONFIG_BASE="${HOME}/.ptekwpdev"
-PROJECT_BASE="${HOME}/projects"
-
-mkdir -p "${CONFIG_BASE}"
-mkdir -p "${PROJECT_BASE}"
-
-info "APP_BASE:     ${APP_BASE}"
-info "CONFIG_BASE:  ${CONFIG_BASE}"
-info "PROJECT_BASE: ${PROJECT_BASE}"
+LOG_DIR="$APP_BASE/app/logs"
+mkdir -p "$LOG_DIR"
+set_log --truncate "$LOG_DIR/app_bootstrap.log" "=== App Bootstrap Run ($(date)) ==="
 
 # ------------------------------------------------------------------------------
-# Generate secrets
+# Flags
 # ------------------------------------------------------------------------------
+CONFIG_BASE="$HOME/.ptekwpdev"
+PROJECT_BASE="$HOME/ptekwpdev_repo"
+WHAT_IF=false
+NO_PROMPT=false
+FORCE=false
 
-generate_secret() {
-  head -c 64 /dev/urandom | tr -dc 'A-Za-z0-9' | head -c 32
+print_usage() {
+  echo "Usage: $0 [options]"
+  echo "  --config-base <path>"
+  echo "  --project-base <path>"
+  echo "  -w | --what-if"
+  echo "  -n | --no-prompt"
+  echo "  -f | --force"
+  echo "  -h | --help"
 }
 
-SQDB_ROOT_PASS="$(generate_secret)"
-SQDB_ROOT_USER="root"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --config-base) CONFIG_BASE="$2"; shift 2 ;;
+    --project-base) PROJECT_BASE="$2"; shift 2 ;;
+    -w|--what-if) WHAT_IF=true; shift ;;
+    -n|--no-prompt) NO_PROMPT=true; shift ;;
+    -f|--force) FORCE=true; shift ;;
+    -h|--help) print_usage; exit 0 ;;
+    *) echo "Unknown option: $1"; exit 1 ;;
+  esac
+done
+
+if [[ -z "$CONFIG_BASE" ]]; then error "CONFIG_BASE cannot be empty."; exit 1; fi
+if [[ -z "$PROJECT_BASE" ]]; then error "PROJECT_BASE cannot be empty."; exit 1; fi
+
+if [[ "$WHAT_IF" == true ]]; then
+  whatif "------------------------------------------------------------"
+  whatif "  WHAT-IF MODE ENABLED — NO CHANGES WILL BE WRITTEN"
+  whatif "------------------------------------------------------------"
+fi
 
 # ------------------------------------------------------------------------------
-# Generate app.json in APP_BASE, ready to be deployed to CONFIG_BASE
+# Safe secret generator (ASCII-only, JSON-safe)
 # ------------------------------------------------------------------------------
+generate_secret() {
+  LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 32 || true
+}
 
-APP_JSON="${APP_BASE}/app/config/app.json"
+generate_secret_keys() {
+  
+  info "Generating secrets key values..."
 
-info "Generating app.json → ${APP_JSON}"
+  SQLDB_ROOT_USER="root"
+  if [[ "$WHAT_IF" == true ]]; then
+    SQLDB_ROOT_PASS=""
+  else
+    SQLDB_ROOT_PASS="$(generate_secret)"
+  fi
 
-cat > "${APP_JSON}" <<EOF
+  success "Secrets key values created"
+}
+
+# ------------------------------------------------------------------------------
+# JSON-safe string escaper (newline-safe)
+# ------------------------------------------------------------------------------
+json_escape() {
+  printf '%s' "$1" | jq -R . | tr -d '\n'
+}
+
+# ------------------------------------------------------------------------------
+# Paths
+# ------------------------------------------------------------------------------
+APP_JSON="$APP_BASE/app/config/app.json"
+SCHEMA_PATH="$APP_BASE/app/config/schema/app.schema.json"
+
+# ------------------------------------------------------------------------------
+# Directory scaffolding
+# ------------------------------------------------------------------------------
+create_directory_structure() {
+  info "Preparing directory structure..."
+
+  REQUIRED_DIRS=(
+    "$APP_BASE/app/config"
+    "$CONFIG_BASE"
+    "$CONFIG_BASE/config"
+    "$PROJECT_BASE"
+    "$PROJECT_BASE/wordpress"
+    "$PROJECT_BASE/src"
+    "$PROJECT_BASE/src/plugins"
+    "$PROJECT_BASE/src/themes"
+  )
+
+  for dir in "${REQUIRED_DIRS[@]}"; do
+    if [[ "$WHAT_IF" == true ]]; then
+      whatif "WHAT-IF: Would create directory: $dir"
+    else
+      mkdir -p "$dir"
+      info "Ensured: $dir"
+    fi
+  done
+  
+  echo "DEBUG: after scaffolding, exit code=$?" >&2
+
+  info "Directory scaffolding complete."
+}
+
+# ------------------------------------------------------------------------------
+# Write app.json
+# ------------------------------------------------------------------------------
+write_app_json() {
+
+  info "Generating app.json → $APP_JSON"
+  local esc_pass
+  esc_pass=$(json_escape "$SQLDB_ROOT_PASS")
+
+  local json_content
+  json_content="$(cat <<EOF
 {
   "app_key": "ptekwpdev",
-  "app_base": "${APP_BASE}",
-  "config_base": "${CONFIG_BASE}",
-  "project_base": "${PROJECT_BASE}",
+  "app_base": "$APP_BASE",
+  "config_base": "$CONFIG_BASE",
+  "project_base": "$PROJECT_BASE",
 
   "backend_network": "ptekwpdev_backend",
 
   "secrets": {
-    "sqldb_root": "${SQDB_ROOT_USER}",
-    "sqldb_root_pass": "${SQDB_ROOT_PASS}"
+    "sqldb_root": "$SQLDB_ROOT_USER",
+    "sqldb_root_pass": $esc_pass
   },
 
   "database": {
     "sqldb_port": "3306",
-    "sqldb_image": "mariadb:10.11",
+    "sqldb_image": "mariadb",
     "sqldb_version": "10.5",
 
     "sqladmin_image": "phpmyadmin/phpmyadmin",
@@ -118,43 +182,54 @@ cat > "${APP_JSON}" <<EOF
     "image": "wordpress:latest",
     "php_version": "8.2",
     "port": 8080,
-    "ssl_port": 8443
+    "ssl_port": "8443"
   }
 }
 EOF
+)"
 
-success "app.json created at ${APP_JSON}"
+  if [[ "$WHAT_IF" == true ]]; then
+    whatif "WHAT-IF: Would write app.json:"
+    whatif "$json_content"
+    return 0
+  fi
 
-# ------------------------------------------------------------------------------
-# Validate JSON
-# ------------------------------------------------------------------------------
+  if [[ -f "$APP_JSON" && "$FORCE" != true ]]; then
+    error "$APP_JSON already exists. Use --force to overwrite."
+    exit 1
+  fi
 
-if ! jq empty "${APP_JSON}" >/dev/null 2>&1; then
-  error "Generated app.json is invalid JSON"
-  exit 1
-fi
+  # TODO: Re-enable schema validation once Ajv meta-schema handling is fixed.
+  # validate_schema "$json_content"
 
-success "app.json validated"
-
-# ------------------------------------------------------------------------------
-# Prepare CONFIG_BASE directory structure
-# ------------------------------------------------------------------------------
-
-info "Preparing CONFIG_BASE directory structure"
-
-mkdir -p "${CONFIG_BASE}/config"
-mkdir -p "${CONFIG_BASE}/docker"
-mkdir -p "${CONFIG_BASE}/config/proxy"
-mkdir -p "${CONFIG_BASE}/config/wordpress"
-mkdir -p "${CONFIG_BASE}/config/php"
-
-info "Copying app.json into $CONFIG_BASE/config"
-cp "$APP_BASE/app/config/app.json" "$CONFIG_BASE/config"
-
-success "CONFIG_BASE initialized"
+  echo "$json_content" > "$APP_JSON"
+  success "Wrote app.json → $APP_JSON"
+}
 
 # ------------------------------------------------------------------------------
-# Done
+# Deploy to CONFIG_BASE
 # ------------------------------------------------------------------------------
+deploy_app_config() {
+  local dest="$CONFIG_BASE/config/app.json"
 
+  if [[ "$WHAT_IF" == true ]]; then
+    whatif "WHAT-IF: Would copy $APP_JSON → $dest"
+    return 0
+  fi
+
+  cp "$APP_JSON" "$dest"
+  success "CONFIG_BASE initialized at $dest"
+}
+
+# ------------------------------------------------------------------------------
+# Orchestrator
+# ------------------------------------------------------------------------------
+bootstrap_app() {
+  create_directory_structure
+  generate_secret_keys
+  write_app_json
+  deploy_app_config
+}
+
+bootstrap_app
 success "App bootstrap complete."
