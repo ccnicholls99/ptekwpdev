@@ -1,3 +1,47 @@
+# **PTEKWPDEV — Quick Lifecycle Overview**
+
+This document walks through the complete end‑to‑end lifecycle of a PTEKWPDEV project — from a clean slate to a fully running WordPress environment.  
+The platform is designed around **clear separation of responsibilities**, **deterministic provisioning**, and **contributor‑safe workflows**.
+
+At a high level, the lifecycle flows through five stages:
+
+1. **Bootstrap the app**  
+   Initialize global configuration, secrets, and directory scaffolding.
+
+2. **Deploy the app environment**  
+   Install runtime templates, generate the app‑level `.env`, and start core containers.
+
+3. **Create a project**  
+   Register project metadata in `projects.json` (no provisioning yet).
+
+4. **Deploy the project**  
+   Scaffold the project directory, copy templates, provision dev sources, and generate project‑level Docker config.
+
+5. **Launch the project**  
+   Start, stop, restart, and manage project containers.
+
+---
+
+## **Lifecycle Diagram**
+
+```mermaid
+flowchart TD
+
+    A[Clean Slate] --> B[app_bootstrap.sh<br/>Initialize app-level config<br/>Generate secrets<br/>Scaffold directories]
+
+    B --> C[app_deploy.sh<br/>Deploy runtime templates<br/>Generate .env<br/>Start core containers]
+
+    C --> D[project_create.sh<br/>Create project metadata<br/>Insert into projects.json]
+
+    D --> E[project_deploy.sh<br/>Scaffold project repo<br/>Copy templates<br/>Provision dev sources<br/>Generate .env + compose]
+
+    E --> F[project_launch.sh<br/>Start/stop/restart<br/>View logs<br/>Refresh containers]
+
+    F --> G[Project Ready<br/>WordPress running<br/>Dev sources active]
+```
+
+---
+
 # PTEKWPDEV — Full Lifecycle Test
 This document captures a clean-slate, end-to-end lifecycle test of the PTEKWPDEV
 platform. It demonstrates the contributor workflow from app initialization to
@@ -327,6 +371,142 @@ At this point:
 - All metadata is ready for provisioning  
 - No files or containers have been created yet  
 - The system is ready for **project deployment**  
+
+---
+
+Absolutely, Craig — here is a **clean, tightened, lifecycle‑aligned rewrite of Section 4**, matching the tone and structure of the earlier sections and reflecting the *actual* behavior of `project_deploy.sh` as it exists today.
+
+This version is precise, contributor‑friendly, and architecturally accurate.
+
+---
+
+# **4. Deploy the Project (`project_deploy.sh`)**
+
+Once a project has been created and registered in `projects.json`, the next step is to **deploy** it.  
+Deployment prepares the project’s filesystem, copies all runtime templates, provisions dev‑sources, and generates the project‑level Docker configuration.
+
+This step **does not** start containers — that is handled later by `project_launch.sh`.
+
+---
+
+## **Command**
+
+```bash
+cd $HOME/projects/ptekwpdev/bin
+./project_deploy.sh --project demo --action deploy
+```
+
+---
+
+## **Expected Output (annotated)**
+
+```
+[INFO] Loading project configuration for 'demo'
+[INFO] Resolved project repo: /home/.../ptekwpdev_repo/demo
+
+[INFO] Scaffolding project directories
+[INFO] Copying Docker engine templates
+[INFO] Copying container config templates
+[INFO] Provisioning dev_sources for project 'demo'
+[SUCCESS] dev_sources provisioned
+
+[INFO] Generating project-level .env → .../docker/.env
+[SUCCESS] .env created
+
+[INFO] Generating compose.project.yml → .../docker/compose.project.yml
+[SUCCESS] compose.project.yml created
+
+[SUCCESS] Project 'demo' deployed
+```
+
+---
+
+## **What This Step Does**
+
+`project_deploy.sh` performs **filesystem‑level provisioning** for a single project:
+
+### ✔ Loads project metadata  
+Reads all project settings from:
+
+```
+$CONFIG_BASE/config/projects.json
+```
+
+### ✔ Scaffolds the project directory  
+Creates:
+
+```
+PROJECT_REPO/
+  docker/
+  config/
+  config/proxy/
+  config/wordpress/
+  config/sqladmin/
+  config/doc/
+  src/plugins/
+  src/themes/
+  logs/
+```
+
+### ✔ Copies runtime templates  
+From:
+
+```
+$CONFIG_BASE/docker/
+$CONFIG_BASE/config/
+```
+
+Into:
+
+```
+$PROJECT_REPO/docker/
+$PROJECT_REPO/config/
+```
+
+### ✔ Provisions dev sources  
+For each plugin/theme defined in `projects.json`:
+
+- local sources → copied  
+- remote sources → cloned  
+- optional `.git` removal (init_git=false)  
+- existing directories are preserved  
+
+### ✔ Generates project-level `.env`  
+Using `env.project.tpl` from CONFIG_BASE.
+
+### ✔ Generates `compose.project.yml`  
+Using the project-level Docker template.
+
+---
+
+## **Artifacts Created**
+
+| Path | Description |
+|------|-------------|
+| `$PROJECT_REPO/docker/.env` | Project-level environment variables |
+| `$PROJECT_REPO/docker/compose.project.yml` | Project-level Docker Compose file |
+| `$PROJECT_REPO/config/*` | Project-specific container configs |
+| `$PROJECT_REPO/src/plugins/*` | Provisioned plugin dev sources |
+| `$PROJECT_REPO/src/themes/*` | Provisioned theme dev sources |
+
+---
+
+## **State After This Step**
+
+At this point:
+
+- The project’s filesystem is fully provisioned  
+- All templates and configs are in place  
+- Dev sources are copied or cloned  
+- The project is ready for runtime orchestration  
+
+**Containers are not started yet.**
+
+The next step is:
+
+```
+./project_launch.sh --project demo --action start
+```
 
 ---
 
