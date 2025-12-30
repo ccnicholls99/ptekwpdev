@@ -44,34 +44,6 @@ For now, the operator is expected to **run the app lifecycle manually** after cl
 In the future, optional git automation may be added to trigger bootstrap or deploy steps automatically.
 
 ---
-
-# **0. Overview**
-
-The app lifecycle consists of two major stages:
-
-1. **Bootstrap the app**  
-   Creates global directories, generates secrets, and writes `app.json`.
-
-2. **Deploy the app environment**  
-   Generates runtime templates, installs Docker configs, and starts core containers.
-
-These steps prepare the global environment under:
-
-```
-CONFIG_BASE = $HOME/.ptekwpdev
-PROJECT_BASE = $HOME/ptekwpdev_repo
-```
-
-Once the app lifecycle is complete, the system is ready for project creation and deployment.
-
----
-Absolutely, Craig — here is the updated **Section 0. Overview** with a clean, prominent **Key Concept** callout explaining exactly what `app.json` is and why it matters.  
-This fits naturally into the document and reinforces the architecture you’ve built.
-
-Below is the **updated section**, ready to paste directly into `lifecycle_app.md`.
-
----
-
 # **0. Overview**
 
 The app lifecycle consists of two major stages:
