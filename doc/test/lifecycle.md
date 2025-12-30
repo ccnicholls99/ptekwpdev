@@ -35,20 +35,20 @@ This lifecycle test begins from a completely clean BASH environment. The followi
   This directory will be created by `app_bootstrap.sh` and used to store all project‑level deployments.
 
 - **DOCKER**  
-    All previous containers, networks and images removed/pruned...
-    Volumes:
-        ptekwpdev_assets
-        ptekwpdev_db
-    Networks:
-        [project]_frontend
-        ptekwpdev_backend
-    Images:
-        (optional but recommended for a full clean slate)
-        phpmyadmin/phpmyadmin
-        mariadb:10.11
-        nginx:alpine
-        wordpress:latest
-        wordpress:cli
+    # All previous containers, networks and images removed/pruned...
+    # Volumes:
+      ## ptekwpdev_assets
+      ## ptekwpdev_db
+    # Networks:
+      ## [project]_frontend
+      ## ptekwpdev_backend
+    # Images:
+      ## (optional but recommended for a full clean slate)
+      ## phpmyadmin/phpmyadmin
+      ## mariadb:10.11
+      ## nginx:alpine
+      ## wordpress:latest
+      ## wordpress:cli
 
 ---
 
@@ -56,15 +56,10 @@ This lifecycle test begins from a completely clean BASH environment. The followi
 ## 0. Clean Slate
 Before beginning, ensure no previous runtime state exists (see assumptions).
 Commands:
-    rm -rf $HOME/.ptekwpdev
-    rm -rf $HOME/ptekwpdev_repo
-
-# **1. Run `app_bootstrap.sh`**
-
-This is the first real action in the lifecycle, and now that your bootstrap script is stable, we can document it cleanly and confidently.
-
-Below is a polished continuation you can drop directly into `lifecycle.md`.  
-It follows the tone and structure you’ve already established.
+```
+rm -rf $HOME/.ptekwpdev
+rm -rf $HOME/ptekwpdev_repo
+```
 
 ---
 
@@ -128,15 +123,84 @@ cd $HOME/projects/ptekwpdev/bin
 
 ---
 
-# **Next Step: 2. Run `app_deploy.sh`**
+# **2. Run `app_deploy.sh`**
 
-This is the next major milestone in the lifecycle test.
+After bootstrapping the application, the next step is to deploy the **runtime environment**.  
+This prepares all app‑level runtime assets under `$CONFIG_BASE`, generates the `.env` file used by core containers, and brings the app‑level Docker services online.
 
-`app_deploy.sh` will:
+### **Command**
 
-- Ensure `projects.json` exists  
-- Initialize runtime state  
-- Prepare the environment for project creation  
-- Optionally register the demo project  
+```bash
+cd $HOME/projects/ptekwpdev/bin
+./app_deploy.sh -a init
+```
 
+### **Expected Output (annotated)**
 
+```
+[INFO] Generating projects.json → ~/.ptekwpdev/config/projects.json
+[INFO] projects.json not found — generating from template
+[SUCCESS] projects.json created
+
+[INFO] Deploying env templates from app/config → ~/.ptekwpdev/config
+[SUCCESS] Env templates deployed
+
+[INFO] Deploying Docker engine templates → ~/.ptekwpdev/docker
+[SUCCESS] Docker templates deployed
+
+[INFO] Deploying container config directories from config/ → ~/.ptekwpdev/config
+[SUCCESS] Container config directories deployed
+
+[INFO] Generating app-level .env file...
+[SUCCESS] .env file written to ~/.ptekwpdev/docker/.env
+
+[INFO] Starting core containers...
+[SUCCESS] Core containers are online
+
+[SUCCESS] App environment deployed at ~/.ptekwpdev
+```
+
+### **What This Step Does**
+
+`app_deploy.sh` is responsible for preparing the **runtime layer** of the platform:
+
+- Creates `projects.json` from `projects.tpl.json`  
+- Deploys all `env.*.tpl` templates  
+- Deploys Docker engine templates (`compose.app.yml`, `compose.project.yml`, Dockerfiles, etc.)  
+- Deploys container config directories (`proxy/`, `wordpress/`, `sqladmin/`, etc.)  
+- Generates the app‑level `.env` file using values from `app.json`  
+- Starts the core containers defined in `compose.app.yml`  
+
+### **Artifacts Created**
+
+| Path | Description |
+|------|-------------|
+| `$CONFIG_BASE/config/projects.json` | Runtime project registry (initially empty) |
+| `$CONFIG_BASE/config/env.*.tpl` | Runtime environment templates |
+| `$CONFIG_BASE/docker/compose.app.yml` | App‑level Docker Compose file |
+| `$CONFIG_BASE/docker/.env` | App‑level environment variables |
+| Docker containers | MariaDB, phpMyAdmin, asset volume, backend network |
+
+### **State After This Step**
+
+At this point:
+
+- The **app layer is fully initialized**  
+- The **runtime layer is fully deployed**  
+- Core containers are running  
+- The system is ready for **project creation**  
+
+---
+
+# **Next Step: 3. Create a Project (`project_create.sh`)**
+
+This is the next major milestone in the lifecycle.
+
+`project_create.sh` will:
+
+- create a new project directory under `$PROJECT_BASE`  
+- scaffold project‑level config  
+- generate project‑level `.env`  
+- generate `compose.project.yml`  
+- register the project in `projects.json`  
+- prepare the project for launch  
