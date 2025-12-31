@@ -48,6 +48,7 @@ See the [Contributors Roll](contributors.md).
 
 ---
 # **PTEKWPDEV — Architectural Flowchart **
+```mermaid
 flowchart TB
 
     %% ============================
@@ -87,6 +88,7 @@ flowchart TB
 
     T2 --> T3
     T1 -. mounted into .-> T3
+    ```
 ---
 # **PTEKWPDEV**
 
