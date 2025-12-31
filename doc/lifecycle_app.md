@@ -23,9 +23,9 @@ In this RC version, we assume the app will be cloned to a directory named "path/
 directory name of "ptekwpdev". You can choose a different folder name and it should work, but at this point it is "experimental".
 
 In this document, we will assume the following default settings will be used...
-APP_BASE => $HOME/projects/ptekwpdev            [under git]
-CONFIG_BASE => $HOME/.ptekwpdev                 [not source controlled]
-PROJECT_BASE => $HOME/ptekdevwp_repo            [not source controlled but contains child git repos]
+- APP_BASE => $HOME/projects/ptekwpdev            [under git]
+- CONFIG_BASE => $HOME/.ptekwpdev                 [not source controlled]
+- PROJECT_BASE => $HOME/ptekdevwp_repo            [not source controlled but contains child git repos]
 
 ---
 
