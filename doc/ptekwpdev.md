@@ -65,6 +65,9 @@ It includes:
 The app layer is initialized once and rarely changed.  
 It ensures every project runs on the same foundation.
 
+Read the details here at [App Lifecycle](lifecycle_app.md).
+
+
 ### **2. The Project Layer (Per‑Project Environment)**  
 Each project is fully isolated and has:
 
@@ -77,6 +80,8 @@ Each project is fully isolated and has:
 
 Projects share only the backend database and asset volume, but everything else is self‑contained.
 
+Read the details here at [Project Lifecycle](lifecycle_project.md).
+
 ### **3. The Orchestration Layer (Scripts)**  
 PTEKWPDEV uses a set of deterministic, contributor‑safe scripts to manage the entire lifecycle:
 
@@ -88,6 +93,7 @@ PTEKWPDEV uses a set of deterministic, contributor‑safe scripts to manage the 
 
 Each script has a **single responsibility**, ensuring clarity and preventing accidental side effects.
 
+Scripts are available from $APP_BASE/bin/
 ---
 
 # **How PTEKWPDEV Orchestrates WordPress Development**
