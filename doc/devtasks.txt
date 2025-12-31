@@ -89,5 +89,23 @@
             4. Re-enable validate_schema "$json_content" in write_app_json()
       - Priority: Medium (bootstrap works without it)
       - Owner: Craig
-      
+
+[ ] app_deploy: Implement automatic backup/archive of JSON config files
+---------------------------------------------------------------------------
+      Before app_deploy overwrites any JSON configuration file inside
+      CONFIG_BASE/config (e.g., app.json, projects.json, environments.json),
+      the script must create a timestamped backup/archive copy.
+
+      Rationale:
+      - Prevent accidental loss of contributor-created or user-specific config.
+      - Ensure all overwrites are reversible and auditable.
+      - Maintain deterministic, contributor-safe deployment flows.
+      - Aligns with the repo-wide philosophy of explicit, non-destructive tooling.
+
+      Suggested approach:
+      - Before writing or copying a JSON file, check if it exists.
+      - If it exists, copy it to CONFIG_BASE/config/archive/<filename>.<timestamp>.json
+      - Log the backup action in the app_deploy log.
+      - Proceed with overwrite only after successful backup.
+
 # Add new tasks below this line

@@ -54,9 +54,13 @@ fi
 # Variables
 # ------------------------------------------------------------------------------
 PROJECT=""
+PROJECT_TITLE=""
+PROJECT_DESCRIPTION=""
 DOMAIN=""
 NETWORK=""
 BASE_DIR=""
+WP_IMAGE=""
+WP_HOST=""
 PORT=""
 SSL_PORT=""
 WHAT_IF=false
@@ -97,6 +101,10 @@ EOF
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -p|--project) PROJECT="$2"; shift 2 ;;
+    --title) PROJECT_TITLE="$2"; shift 2 ;;
+    --description) PROJECT_DESCRIPTION="$2"; shift 2 ;;
+    --wp-image) WP_IMAGE="$2"; shift 2 ;;
+    --wp-host) WP_HOST="$2"; shift 2 ;;
     -d|--domain) DOMAIN="$2"; shift 2 ;;
     -n|--network) NETWORK="$2"; shift 2 ;;
     -b|--base-dir) BASE_DIR="$2"; shift 2 ;;
@@ -137,15 +145,23 @@ fi
 # Compute defaults
 # ------------------------------------------------------------------------------
 DEFAULT_DOMAIN="${PROJECT}.local"
+DEFAULT_TITLE="${PROJECT}"
+DEFAULT_DESCRIPTION="A new WordPress site for ${PROJECT}"
 DEFAULT_NETWORK="ptekwpdev_${PROJECT}_net"
 DEFAULT_BASE_DIR="${PROJECT}"
+DEFAULT_WP_IMAGE="$(appcfg wordpress_default_image)"
+DEFAULT_WP_HOST="${PROJECT}.local"
 DEFAULT_PORT="8080"
 DEFAULT_SSL_PORT="8443"
 
 # Apply defaults if missing
+PROJECT_TITLE="${PROJECT_TITLE:-$DEFAULT_TITLE}"
+PROJECT_DESCRIPTION="${PROJECT_DESCRIPTION:-$DEFAULT_DESCRIPTION}"
 DOMAIN="${DOMAIN:-$DEFAULT_DOMAIN}"
 NETWORK="${NETWORK:-$DEFAULT_NETWORK}"
 BASE_DIR="${BASE_DIR:-$DEFAULT_BASE_DIR}"
+WP_IMAGE="${WP_IMAGE:-$DEFAULT_WP_IMAGE}"
+WP_HOST="${WP_HOST:-$DEFAULT_WP_HOST}"
 PORT="${PORT:-$DEFAULT_PORT}"
 SSL_PORT="${SSL_PORT:-$DEFAULT_SSL_PORT}"
 
@@ -154,18 +170,26 @@ SSL_PORT="${SSL_PORT:-$DEFAULT_SSL_PORT}"
 # ------------------------------------------------------------------------------
 if ! $WHAT_IF; then
   info "Using defaults for project '${PROJECT}':"
+  echo "  Title:     $PROJECT_TITLE"
+  echo "  Desc:      $PROJECT_DESCRIPTION"
   echo "  Domain:    $DOMAIN"
   echo "  Network:   $NETWORK"
   echo "  Base dir:  $BASE_DIR"
+  echo "  WP Image:  $WP_IMAGE"
+  echo "  WP Host:   $WP_HOST"  
   echo "  HTTP port: $PORT"
   echo "  HTTPS port:$SSL_PORT"
   echo
 
   read -rp "Would you like to change any of these? (y/n): " change_defaults
   if [[ "$change_defaults" =~ ^[Yy]$ ]]; then
+    read -rp "Title [$PROJECT_TITLE]: " input; PROJECT_TITLE="${input:-$PROJECT_TITLE}"
+    read -rp "Description [$PROJECT_DESCRIPTION]: " input; PROJECT_DESCRIPTION="${input:-$PROJECT_DESCRIPTION}"
     read -rp "Domain [$DOMAIN]: " input; DOMAIN="${input:-$DOMAIN}"
     read -rp "Network [$NETWORK]: " input; NETWORK="${input:-$NETWORK}"
     read -rp "Base dir [$BASE_DIR]: " input; BASE_DIR="${input:-$BASE_DIR}"
+    read -rp "WordPress image [$WP_IMAGE]: " input; WP_IMAGE="${input:-$WP_IMAGE}"
+    read -rp "WordPress host [$WP_HOST]: " input; WP_HOST="${input:-$WP_HOST}"
     read -rp "HTTP port [$PORT]: " input; PORT="${input:-$PORT}"
     read -rp "HTTPS port [$SSL_PORT]: " input; SSL_PORT="${input:-$SSL_PORT}"
   fi
@@ -205,9 +229,13 @@ WP_ADMIN_EMAIL="admin@${DOMAIN}"
 # Build JSON block
 # ------------------------------------------------------------------------------
 project_block=$(jq -n \
+  --arg title "$PROJECT_TITLE" \
+  --arg desc "$PROJECT_DESCRIPTION" \
   --arg domain "$DOMAIN" \
   --arg network "$NETWORK" \
   --arg base_dir "$BASE_DIR" \
+  --arg wpimage "$WP_IMAGE" \
+  --arg wphost "$WP_HOST" \
   --arg port "$PORT" \
   --arg ssl_port "$SSL_PORT" \
   --arg dbname "$SQLDB_NAME" \
@@ -217,10 +245,14 @@ project_block=$(jq -n \
   --arg wppass "$WP_ADMIN_PASS" \
   --arg wpemail "$WP_ADMIN_EMAIL" \
   '{
+    project_title: $title,
+    project_description: $desc,
     project_domain: $domain,
     project_network: $network,
     base_dir: $base_dir,
     wordpress: {
+      image: $wpimage,
+      host: $wphost,
       port: $port,
       ssl_port: $ssl_port
     },
@@ -293,9 +325,13 @@ success "Project creation complete"
 echo
 echo "Summary:"
 echo "  Project:   $PROJECT"
+echo "  Title:     $PROJECT_TITLE"
+echo "  Desc:      $PROJECT_DESCRIPTION"
 echo "  Domain:    $DOMAIN"
 echo "  Network:   $NETWORK"
 echo "  Base dir:  $BASE_DIR"
+echo "  WP Image:  $WP_IMAGE"
+echo "  WP Host:   $WP_HOST"
 echo "  Ports:     $PORT / $SSL_PORT"
 echo "  Dev flags: ${#DEV_FLAGS[@]}"
 echo
