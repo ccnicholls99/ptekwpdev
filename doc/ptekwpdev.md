@@ -67,7 +67,7 @@ flowchart TB
     %% ============================
 
     subgraph T2["Tier 2 — App Platform (Global Configuration)"]
-        B1[app_bootstrap\nInitialize CONFIG_BASE<br/>Generate app.json]
+        B1[app_bootstrap\nInitialize CONFIG_BASE\nGenerate app.json]
         B2[app_deploy\nCopy templates<br/>Generate app-level Docker config]
     end
 
@@ -76,8 +76,8 @@ flowchart TB
     %% ============================
 
     subgraph T3["Tier 3 — Projects (Per‑Project WordPress Environments)"]
-        C1[project_create\nCreate metadata<br/>Insert into projects.json]
-        C2[project_deploy\nScaffold repo<br/>Generate env + compose<br/>Provision WordPress]
+        C1[project_create\nCreate metadata\nInsert into projects.json]
+        C2[project_deploy\nScaffold repo\nGenerate env + compose<br/>Provision WordPress]
         C3[project_launch\nStart/stop/restart containers]
     end
 
