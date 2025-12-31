@@ -10,6 +10,11 @@
 - No previous `CONFIG_BASE` or `PROJECT_BASE` directories exist.
 - Docker is running.
 - You are inside the repo root.
+---
+For the purpose of this document, we will assume the following key locations:
+- APP_BASE => $HOME/projects/ptekwpdev
+- CONFIG_BASE => $HOME/.ptekwpdev
+- PROJECT_BASE => $HOME/ptekwpdev/project_repo
 
 ---
 
@@ -17,18 +22,21 @@
 
 1. Remove any previous config or project directories:
 
-   ```
-   rm -rf ~/projects/ptekwpdev_config
-   rm -rf ~/projects/ptekwpdev_projects
+   ``` bash
+   # CONFIG_BASE
+   rm -rf ~/.ptekwpdev
+   # PROJECT_BASE
+   rm -rf ~/ptekwpdev_repo
    ```
 
 2. Confirm they are gone:
 
    ```
-   ls ~/projects | grep ptekwpdev
+   ls ~/.ptekwpdev
+   ls ~/ptekwpdev_repo
    ```
 
-Expected: Only `ptekwpdev` remains.
+Expected: Only `~/projects/ptekwpdev` (APP_BASE) remains.
 
 ---
 
@@ -51,8 +59,8 @@ Expected outcomes:
 Verify:
 
 ```
-ls $CONFIG_BASE/config
-cat $CONFIG_BASE/config/app.json
+ls ~/.ptekwpdev/config
+cat ~/.ptekwpdev/config/app.json
 ```
 
 ---
@@ -80,8 +88,8 @@ Expected outcomes:
 Verify:
 
 ```
-ls $CONFIG_BASE/config
-cat $CONFIG_BASE/config/projects.json
+ls ~/.ptekwpdev/config
+cat ~/.ptekwpdev/config/projects.json
 ```
 
 Expected:  
@@ -121,7 +129,7 @@ Expected interactive flow:
 Verify:
 
 ```
-cat $CONFIG_BASE/config/projects.json | jq '.projects.demo'
+cat ~/.ptekwpdev/config/projects.json | jq '.projects.demo'
 ```
 
 Expected fields:
@@ -156,7 +164,7 @@ Expected:
 Verify:
 
 ```
-cat $CONFIG_BASE/config/projects.json | jq '.projects.demo.dev_sources'
+cat ~/.ptekwpdev/config/projects.json | jq '.projects.demo.dev_sources'
 ```
 
 ---
@@ -172,7 +180,7 @@ Command:
 Expected outcomes:
 
 - PROJECT_REPO computed:
-  `$PROJECT_BASE/demo`
+  `~/ptekwpdev_repo/demo`
 - Project directory created:
   - `wordpress/`
   - `app/`
@@ -192,8 +200,8 @@ Expected outcomes:
 Verify:
 
 ```
-ls $PROJECT_BASE/demo
-cat $PROJECT_BASE/demo/docker/.env
+ls ~/ptekwpdev_repo/demo
+cat ~/ptekwpdev_repo/demo/docker/.env
 ```
 
 ---
@@ -279,8 +287,8 @@ Expected:
 Verify:
 
 ```
-cat $CONFIG_BASE/config/projects.json
-ls $PROJECT_BASE
+cat ~/.ptekwpdev/config/projects.json
+ls ~/ptekwpdev_repo
 ```
 
 ---
