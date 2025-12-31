@@ -57,9 +57,9 @@ flowchart TB
 %% ============================
 
 subgraph T1["Tier 1 — Global Assets (Independent Subsystem)"]
-A1["assets_bootstrap\nInitialize assets container + volume"]
-A2["assets_add\nAdd global plugins/themes/static bundles"]
-A3["assets_list\nInspect global assets"]
+A1["assets_bootstrap (Initialize assets container + volume)"]
+A2["assets_add (Add global plugins/themes/static bundles)"]
+A3["assets_list (Inspect global assets)"]
 end
 
 %% ============================
@@ -67,8 +67,8 @@ end
 %% ============================
 
 subgraph T2["Tier 2 — App Platform (Global Configuration)"]
-B1["app_bootstrap\nInitialize CONFIG_BASE\nGenerate app.json"]
-B2["app_deploy\nCopy templates\nGenerate app-level Docker config"]
+B1["app_bootstrap (Initialize CONFIG_BASE\nGenerate app.json)"]
+B2["app_deploy (Copy templates\nGenerate app-level Docker config)"]
 end
 
 %% ============================
@@ -76,9 +76,9 @@ end
 %% ============================
 
 subgraph T3["Tier 3 — Projects (Per-Project WordPress Environments)"]
-C1["project_create\nCreate metadata\nInsert into projects.json"]
-C2["project_deploy\nScaffold repo\nGenerate env + compose\nProvision WordPress"]
-C3["project_launch\nStart/stop/restart containers"]
+C1["project_create (Create metadata\nInsert into projects.json)"]
+C2["project_deploy (Scaffold repo, Generate env + compose\nProvision WordPress)"]
+C3["project_launch(Start/stop/restart containers)"]
 end
 
 %% ============================
