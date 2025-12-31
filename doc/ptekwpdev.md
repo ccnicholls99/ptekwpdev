@@ -48,6 +48,7 @@ See the [Contributors Roll](contributors.md).
 
 ---
 # **PTEKWPDEV — Architectural Flowchart **
+
 ```mermaid
 flowchart TB
 
@@ -56,9 +57,9 @@ flowchart TB
     %% ============================
 
     subgraph T1["Tier 1 — Global Assets (Independent Subsystem)"]
-        A1[assets_bootstrap<br/>Initialize assets container + volume]
-        A2[assets_add<br/>Add global plugins/themes/static bundles]
-        A3[assets_list<br/>Inspect global assets]
+        A1["assets_bootstrap\nInitialize assets container + volume"]
+        A2["assets_add\nAdd global plugins/themes/static bundles"]
+        A3["assets_list\nInspect global assets"]
     end
 
     %% ============================
@@ -66,18 +67,18 @@ flowchart TB
     %% ============================
 
     subgraph T2["Tier 2 — App Platform (Global Configuration)"]
-        B1[app_bootstrap<br/>Initialize CONFIG_BASE<br/>Generate app.json]
-        B2[app_deploy<br/>Copy templates<br/>Generate app-level Docker config]
+        B1["app_bootstrap\nInitialize CONFIG_BASE\nGenerate app.json"]
+        B2["app_deploy\nCopy templates\nGenerate app-level Docker config"]
     end
 
     %% ============================
     %% TIER 3 — PROJECTS
     %% ============================
 
-    subgraph T3["Tier 3 — Projects (Per‑Project WordPress Environments)"]
-        C1[project_create<br/>Create metadata<br/>Insert into projects.json]
-        C2[project_deploy<br/>Scaffold repo<br/>Generate env + compose<br/>Provision WordPress]
-        C3[project_launch<br/>Start/stop/restart containers]
+    subgraph T3["Tier 3 — Projects (Per-Project WordPress Environments)"]
+        C1["project_create\nCreate metadata\nInsert into projects.json"]
+        C2["project_deploy\nScaffold repo\nGenerate env + compose\nProvision WordPress"]
+        C3["project_launch\nStart/stop/restart containers"]
     end
 
     %% ============================
@@ -87,8 +88,9 @@ flowchart TB
     A1 --> A2 --> A3
 
     T2 --> T3
-    T1 -. mounted into .-> T3
+    T1 -. "mounted into" .-> T3
     ```
+
 ---
 # **PTEKWPDEV**
 
