@@ -87,12 +87,13 @@ generate_secret_keys() {
 
   SQLDB_ROOT_USER="root"
   if [[ "$WHAT_IF" == true ]]; then
-    SQLDB_ROOT_PASS=""
+    SQLDB_ROOT_PASS="**secret**"
+    whatif "Dummy Secrets key values created"
   else
     SQLDB_ROOT_PASS="$(generate_secret)"
+    success "Secrets key values created"
   fi
 
-  success "Secrets key values created"
 }
 
 # ------------------------------------------------------------------------------
@@ -119,10 +120,6 @@ create_directory_structure() {
     "$CONFIG_BASE"
     "$CONFIG_BASE/config"
     "$PROJECT_BASE"
-    "$PROJECT_BASE/wordpress"
-    "$PROJECT_BASE/src"
-    "$PROJECT_BASE/src/plugins"
-    "$PROJECT_BASE/src/themes"
   )
 
   for dir in "${REQUIRED_DIRS[@]}"; do
@@ -134,7 +131,7 @@ create_directory_structure() {
     fi
   done
   
-  echo "DEBUG: after scaffolding, exit code=$?" >&2
+  #echo "DEBUG: after scaffolding, exit code=$?" >&2
 
   info "Directory scaffolding complete."
 }

@@ -7,7 +7,7 @@
 			"path": "../../.ptekwpdev"
 		},
 		{
-			"path": "../ptwpdev/ptekdemo"
+			"path": "../../ptekwpdev_repo"
 		}
 	],
 	"settings": {}

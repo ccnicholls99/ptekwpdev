@@ -67,22 +67,38 @@ cat ~/.ptekwpdev/config/app.json
 
 ## 3. **Run app_deploy**
 
-Command:
-
+Dev Help:
 ```
-./bin/app_deploy.sh
+./bin/app_deploy.sh -h
+```
+
+Dry Run:
+```
+./bin/app_deploy.sh -a init -w
+```
+Verify:
+  * Check for any WARN or ERROR messages
+  * Scan WHAT-IF messages for sanity check
+
+Live Run:
+```
+./bin/app_deploy.sh -a init
 ```
 
 Expected outcomes:
 
 - All templates copied into `CONFIG_BASE/config`:
-  - `env.app.tpl`
+  - `app.json`
   - `env.project.tpl`
   - `projects.tpl.json` → `projects.json`
-- Docker Compose files generated:
+- Docker Compose files generated to CONFIG_BASE/docker:
+  - .env
   - `compose.app.yml`
-- `.env` generated for app-level services
-- phpMyAdmin + global DB ready (but not launched yet)
+  - `compose.project.yml`
+  - `Dockerfile.wordpress`
+  - `Dockerfile.wpcli`
+  - `.dockerignore`
+- phpMyAdmin + global DB containers ready
 - Backups created for any overwritten JSON files (TODO)
 
 Verify:
