@@ -52,46 +52,46 @@ See the [Contributors Roll](contributors.md).
 ```mermaid
 flowchart TB
 
-    %% ============================
-    %% TIER 1 — GLOBAL ASSETS
-    %% ============================
+%% ============================
+%% TIER 1 — GLOBAL ASSETS
+%% ============================
 
-    subgraph T1["Tier 1 — Global Assets (Independent Subsystem)"]
-        A1[assets_bootstrap\nInitialize assets container + volume]
-        A2[assets_add\nAdd global plugins/themes/static bundles]
-        A3[assets_list\nInspect global assets]
-    end
+subgraph T1["Tier 1 — Global Assets (Independent Subsystem)"]
+A1["assets_bootstrap\nInitialize assets container + volume"]
+A2["assets_add\nAdd global plugins/themes/static bundles"]
+A3["assets_list\nInspect global assets"]
+end
 
-    %% ============================
-    %% TIER 2 — APP PLATFORM
-    %% ============================
+%% ============================
+%% TIER 2 — APP PLATFORM
+%% ============================
 
-    subgraph T2["Tier 2 — App Platform (Global Configuration)"]
-        B1[app_bootstrap\nInitialize CONFIG_BASE\nGenerate app.json]
-        B2[app_deploy\nCopy templates<br/>Generate app-level Docker config]
-    end
+subgraph T2["Tier 2 — App Platform (Global Configuration)"]
+B1["app_bootstrap\nInitialize CONFIG_BASE\nGenerate app.json"]
+B2["app_deploy\nCopy templates\nGenerate app-level Docker config"]
+end
 
-    %% ============================
-    %% TIER 3 — PROJECTS
-    %% ============================
+%% ============================
+%% TIER 3 — PROJECTS
+%% ============================
 
-    subgraph T3["Tier 3 — Projects (Per‑Project WordPress Environments)"]
-        C1[project_create\nCreate metadata\nInsert into projects.json]
-        C2[project_deploy\nScaffold repo\nGenerate env + compose\nProvision WordPress]
-        C3[project_launch\nStart/stop/restart containers]
-    end
+subgraph T3["Tier 3 — Projects (Per-Project WordPress Environments)"]
+C1["project_create\nCreate metadata\nInsert into projects.json"]
+C2["project_deploy\nScaffold repo\nGenerate env + compose\nProvision WordPress"]
+C3["project_launch\nStart/stop/restart containers"]
+end
 
-    %% ============================
-    %% RELATIONSHIPS
-    %% ============================
+%% ============================
+%% RELATIONSHIPS
+%% ============================
 
-    A1 --> A2 --> A3
+A1 --> A2 --> A3
 
-    T2 --> T3
-    T1 -. mounted into.-> T3
-
-    ```
+T2 --> T3
+T1 -. "mounted into" .-> T3
+```
 ---
+
 # **PTEKWPDEV**
 
 At its core, PTEKWPDEV orchestrates three major layers:
