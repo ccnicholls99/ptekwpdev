@@ -97,6 +97,35 @@ T1 -. "mounted into" .-> T3
 
 At its core, PTEKWPDEV orchestrates three major layers:
 
+### **1. The Assets Layer**
+An independent external volume available to all projects. The assets volume is a local global resource for packaged distros that may not be available from 
+public WP repos like Wordpress.com. For example...
+- Certain pro-level packages like ACF Pro, or Breakdance, that must be first downloaded and installed from locally attached storage.
+- Packaged dev_source where you need to test install, update, de-activation, or removal using the WP installer
+- Uploads or other packaged static resources you wish to distribute in an orderly, versioned manner.    
+
+The assets layer is mounted into a docker container and available to all your deployed projects. It uses a simple versioning for assets storage as follows...
+- ptekwpdev_assets_volume/
+  - plugins
+     - pluginA.zip (unversioned) 
+     - pluginB
+        - [version]
+           - pluginB-[version].zip     
+  - themes
+     - themeA.zip (unversioned) 
+     - themeB
+        - [version]
+           - themeB-[version].zip     
+   - static
+     - staticAssetA.zip (unversioned) 
+     - staticAssetB
+        - [version]
+           - staticAssetB-[version].zip     
+
+You can add assets at anytime using APP_BASE/bin/asset_add.sh and then plug them into your project's wordpress provisioning and setup using wpcli.
+
+You can also list available assets using APP_BASE/bin/asset_list.sh
+
 ### **1. The App Layer (Global Environment)**  
 This layer defines the **platform itself**.  
 It includes:
