@@ -52,9 +52,9 @@ See the [Contributors Roll](contributors.md).
 ```mermaid
 flowchart TB
 
-    %% ============================
-    %% TIER 1 — GLOBAL ASSETS
-    %% ============================
+%% ============================
+%% TIER 1 — GLOBAL ASSETS
+%% ============================
 
     subgraph T1["Tier 1 — Global Assets (Independent Subsystem)"]
         A1["assets_bootstrap\nInitialize assets container + volume"]
@@ -62,18 +62,18 @@ flowchart TB
         A3["assets_list\nInspect global assets"]
     end
 
-    %% ============================
-    %% TIER 2 — APP PLATFORM
-    %% ============================
+%% ============================
+%% TIER 2 — APP PLATFORM
+%% ============================
 
     subgraph T2["Tier 2 — App Platform (Global Configuration)"]
         B1["app_bootstrap\nInitialize CONFIG_BASE\nGenerate app.json"]
         B2["app_deploy\nCopy templates\nGenerate app-level Docker config"]
     end
 
-    %% ============================
-    %% TIER 3 — PROJECTS
-    %% ============================
+%% ============================
+%% TIER 3 — PROJECTS
+%% ============================
 
     subgraph T3["Tier 3 — Projects (Per-Project WordPress Environments)"]
         C1["project_create\nCreate metadata\nInsert into projects.json"]
@@ -81,25 +81,60 @@ flowchart TB
         C3["project_launch\nStart/stop/restart containers"]
     end
 
-    %% ============================
-    %% RELATIONSHIPS
-    %% ============================
+%% ============================
+%% RELATIONSHIPS
+%% ============================
 
-    A1 --> A2 --> A3
+A1 --> A2 --> A3
+
+T2 --> T3
+T1 -. "mounted into" .-> T3
+```
 
     T2 --> T3
     T1 -. "mounted into" .-> T3
     ```
 
 ---
+
 # **PTEKWPDEV**
 
 At its core, PTEKWPDEV orchestrates three major layers:
 
-### **1. The App Layer (Global Environment)**  
+## **1. The Assets Layer**
+An independent external volume available to all projects. The assets volume is a local global resource for packaged distros that may not be available from 
+public WP repos like Wordpress.com. For example...
+- Certain pro-level packages like ACF Pro, or Breakdance, that must be first downloaded and installed from locally attached storage.
+- Packaged dev_source where you need to test install, update, de-activation, or removal using the WP installer
+- Uploads or other packaged static resources you wish to distribute in an orderly, versioned manner.    
+
+The assets layer is mounted into a docker container and available to all your deployed projects. It uses a simple versioning for assets storage as follows...
+- ptekwpdev_assets_volume/
+  - plugins
+     - pluginA.zip (unversioned) 
+     - pluginB
+        - [version]
+           - pluginB-[version].zip     
+  - themes
+     - themeA.zip (unversioned) 
+     - themeB
+        - [version]
+           - themeB-[version].zip     
+   - static
+     - staticAssetA.zip (unversioned) 
+     - staticAssetB
+        - [version]
+           - staticAssetB-[version].zip     
+
+You can add assets at anytime using APP_BASE/bin/asset_add.sh and then plug them into your project's wordpress provisioning and setup using wpcli.
+
+You can also list available assets using APP_BASE/bin/asset_list.sh
+
+---
+
+## **2. The App Layer (Global Environment)**  
 This layer defines the **platform itself**.  
 It includes:
-
 - global configuration (`app.json`)  
 - global Docker templates  
 - the backend network  
@@ -113,7 +148,7 @@ It ensures every project runs on the same foundation.
 Read the details here at [App Lifecycle](lifecycle_app.md).
 
 
-### **2. The Project Layer (Per‑Project Environment)**  
+## **3. The Project Layer (Per‑Project Environment)**  
 Each project is fully isolated and has:
 
 - its own directory under `PROJECT_BASE`  
@@ -127,7 +162,7 @@ Projects share only the backend database and asset volume, but everything else i
 
 Read the details here at [Project Lifecycle](lifecycle_project.md).
 
-### **3. The Orchestration Layer (Scripts)**  
+## **4. The Orchestration Layer (Scripts)**  
 PTEKWPDEV uses a set of deterministic, contributor‑safe scripts to manage the entire lifecycle:
 
 - `app_bootstrap.sh` — initialize global config  
