@@ -77,7 +77,7 @@ flowchart TB
 
     subgraph T3["Tier 3 — Projects (Per‑Project WordPress Environments)"]
         C1[project_create\nCreate metadata\nInsert into projects.json]
-        C2[project_deploy\nScaffold repo\nGenerate env + compose<br/>Provision WordPress]
+        C2[project_deploy\nScaffold repo\nGenerate env + compose\nProvision WordPress]
         C3[project_launch\nStart/stop/restart containers]
     end
 
