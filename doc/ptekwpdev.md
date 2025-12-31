@@ -97,7 +97,7 @@ T1 -. "mounted into" .-> T3
 
 At its core, PTEKWPDEV orchestrates three major layers:
 
-### **1. The Assets Layer**
+## **1. The Assets Layer**
 An independent external volume available to all projects. The assets volume is a local global resource for packaged distros that may not be available from 
 public WP repos like Wordpress.com. For example...
 - Certain pro-level packages like ACF Pro, or Breakdance, that must be first downloaded and installed from locally attached storage.
@@ -126,10 +126,11 @@ You can add assets at anytime using APP_BASE/bin/asset_add.sh and then plug them
 
 You can also list available assets using APP_BASE/bin/asset_list.sh
 
-### **1. The App Layer (Global Environment)**  
+---
+
+## **2. The App Layer (Global Environment)**  
 This layer defines the **platform itself**.  
 It includes:
-
 - global configuration (`app.json`)  
 - global Docker templates  
 - the backend network  
@@ -143,7 +144,7 @@ It ensures every project runs on the same foundation.
 Read the details here at [App Lifecycle](lifecycle_app.md).
 
 
-### **2. The Project Layer (Per‑Project Environment)**  
+## **3. The Project Layer (Per‑Project Environment)**  
 Each project is fully isolated and has:
 
 - its own directory under `PROJECT_BASE`  
@@ -157,7 +158,7 @@ Projects share only the backend database and asset volume, but everything else i
 
 Read the details here at [Project Lifecycle](lifecycle_project.md).
 
-### **3. The Orchestration Layer (Scripts)**  
+## **4. The Orchestration Layer (Scripts)**  
 PTEKWPDEV uses a set of deterministic, contributor‑safe scripts to manage the entire lifecycle:
 
 - `app_bootstrap.sh` — initialize global config  
