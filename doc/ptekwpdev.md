@@ -1,10 +1,3 @@
-Here you go, Craig — a **clean split diagram** showing the **App Lifecycle** and **Project Lifecycle** side‑by‑side.  
-This is GitHub‑safe Mermaid, no HTML, no special characters, no parentheses that break rendering.
-
-It gives contributors an instant mental model of the two independent cycles and how they relate.
-
----
-
 # **PTEKWPDEV — Split Lifecycle Diagram**
 
 ```mermaid
