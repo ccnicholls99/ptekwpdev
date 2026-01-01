@@ -4,90 +4,28 @@
 #  Script: project_deploy.sh
 #
 #  Description:
-#    Scaffolds a project filesystem and optional WordPress provisioning based on
-#    app-level config (app_config.sh) and project-level config (project_config.sh).
+#    Scaffolds a project filesystem and optionally provisions WordPress and/or
+#    launches the project. This script relies on:
+#      - app_config.sh  (appcfg)
+#      - project_config.sh (prcfg)
 #
 #    Responsibilities:
-#      - Validate project exists in projects.json
-#      - Resolve app + project paths
-#      - Create project directory structure under PROJECT_BASE
-#      - Generate project-level .env and compose.project.yml
-#      - Optionally invoke wordpress_deploy.sh for WordPress core provisioning
+#      - Validate project exists
+#      - Create project directory structure
+#      - Generate project-level .env
+#      - Copy compose.project.yml from CONFIG_BASE/docker
+#      - Optionally run wordpress_deploy.sh
+#      - Optionally run project_launch.sh
 #
 #    Non-responsibilities:
-#      - Docker container lifecycle (handled by project_launch.sh)
-#      - Project metadata creation (handled by project_create.sh)
-#      - Modifying app.json, app.config, or projects.json structure
-#
-#  Notes:
-#    - Uses Option C logging via app_config.sh/output.sh
-#    - Never exports environment variables
-#    - Never deletes anything; --force only allows reusing existing dirs
+#      - Docker lifecycle (handled by project_launch.sh)
+#      - Metadata creation (handled by project_create.sh)
+#      - Modifying app.json, app.config, or projects.json
 # ==============================================================================
-
 
 set -o errexit
 set -o nounset
 set -o pipefail
-
-# ------------------------------------------------------------------------------
-# Usage
-# ------------------------------------------------------------------------------
-
-usage() {
-  cat <<EOF
-Usage: project_deploy.sh [options]
-
-Options:
-  -p, --project <key>     Project key (required)
-  -f, --force             Allow reuse of existing project directory
-  -c, --core              Deploy Wordpress Core
-  -w, --what-if           Dry run (no changes applied)
-  -h, --help              Show this help
-
-Description:
-  Scaffolds a project's filesystem and generates configuration files based on
-  app.json/app.config and projects.json. Optionally runs WordPress provisioning
-  via wordpress_deploy.sh.
-
-Notes:
-  - This script does NOT start or stop Docker containers; use project_launch.sh.
-  - This script does NOT create project metadata; use project_create.sh first.
-EOF
-}
-
-# ------------------------------------------------------------------------------
-# Ensure project config is laoded
-# ------------------------------------------------------------------------------
-project_config_loader() {
-  
-  info "Loading project configuration for '${PROJECT_KEY}'"
-
-  # Expect project_config.sh to populate PTEKPRCFG for $PROJECT_KEY
-  # Common pattern: consume PROJECT_KEY via env or argument; adapt as needed.
-  export PTEK_PROJECT_KEY="$PROJECT_KEY"
-
-  project_config_load "$PROJECT_KEY"
-
-  # Defensive check
-  if [[ -z "${PTEKPRCFG[project_key]:-}" ]]; then
-    error "project_config.sh did not populate PTEKPRCFG[project_key]"
-    error "Ensure project_config.sh supports PTEK_PROJECT_KEY=$PROJECT_KEY"
-    exit 1
-  fi
-}
-
-
-# ------------------------------------------------------------------------------
-# Preserve caller directory
-# ------------------------------------------------------------------------------
-
-PTEK_CALLER_PWD="$(pwd)"
-ptekwp_cleanup() {
-  cd "$PTEK_CALLER_PWD" || true
-}
-trap ptekwp_cleanup EXIT
-
 
 # ------------------------------------------------------------------------------
 # Resolve APP_BASE
@@ -99,59 +37,51 @@ PTEK_APP_BASE="$(
 export PTEK_APP_BASE
 
 # ------------------------------------------------------------------------------
-# Load support libraries app_config, output, helpers, and project_config
+# Load app config + logging
 # ------------------------------------------------------------------------------
-CHECK_FILE="${PTEK_APP_BASE}/lib/app_config.sh"
-# shellcheck source=/dev/null
-if [[ -f $CHECK_FILE ]]; then
-  source "$CHECK_FILE"
-else
-  printf "ERROR: Unable to source %s" "$CHECK_FILE"
-  exit 1 
-fi
 
-CHECK_FILE="${PTEK_APP_BASE}/lib/output.sh"
 # shellcheck source=/dev/null
-if [[ -f $CHECK_FILE ]]; then
-  source "$CHECK_FILE"
-else
-  printf "ERROR: Unable to source %s" "$CHECK_FILE"
-  exit 1 
-fi
-CHECK_FILE=
+source "${PTEK_APP_BASE}/lib/app_config.sh"
 
 set_log --truncate "$(appcfg app_log_dir)/project_deploy.log" \
   "=== Project Deploy Run ($(date)) ==="
 
-CHECK_FILE="${PTEK_APP_BASE}/lib/helpers.sh"
-# shellcheck source=/dev/null
-if [[ -f $CHECK_FILE ]]; then
-  source "$CHECK_FILE"
-else
-  printf "ERROR: Unable to source %s" "$CHECK_FILE"
-  exit 1 
-fi
-CHECK_FILE=
+# ------------------------------------------------------------------------------
+# Usage
+# ------------------------------------------------------------------------------
 
-CHECK_FILE="${PTEK_APP_BASE}/lib/project_config.sh"
-# shellcheck source=/dev/null
-if [[ -f $CHECK_FILE ]]; then
-  source "$CHECK_FILE"
-else
-  printf "ERROR: Unable to source %s" "$CHECK_FILE"
-  exit 1 
-fi
-CHECK_FILE=
+usage() {
+  cat <<EOF
+Usage: project_deploy.sh [options]
+
+Options:
+  -p, --project <key>       Project key (required)
+  -f, --force               Allow reuse of existing project directory
+  -w, --what-if             Dry run (no changes applied)
+  --auto-wordpress          Automatically run wordpress_deploy.sh
+  --auto-launch             Automatically run project_launch.sh start
+  -h, --help                Show this help
+
+Description:
+  Scaffolds a project's filesystem and generates configuration files based on
+  app.json/app.config and projects.json. Copies compose.project.yml from
+  CONFIG_BASE/docker. Optionally provisions WordPress and/or launches the project.
+
+Notes:
+  - This script does NOT start or stop Docker containers unless --with-launch.
+  - This script does NOT create project metadata; use project_create.sh first.
+EOF
+}
 
 # ------------------------------------------------------------------------------
 # Parse arguments
 # ------------------------------------------------------------------------------
-CONFIG_BASE=
-PROJECT_BASE=
+
 PROJECT_KEY=""
-WORDPRESS_CORE=1
 FORCE=0
-WHAT_IF=1
+WHAT_IF=0
+AUTO_WORDPRESS=0
+AUTO_LAUNCH=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -159,10 +89,12 @@ while [[ $# -gt 0 ]]; do
       PROJECT_KEY="$2"; shift 2;;
     -f|--force)
       FORCE=1; shift;;
-    -c|--core)
-      WORDPRESS_CORE=0; shift;;
     -w|--what-if)
-      WHAT_IF=0; shift;;
+      WHAT_IF=1; shift;;
+    --auto-wordpress)
+      AUTO_WORDPRESS=1; shift;;
+    --auto-launch)
+      AUTO_LAUNCH=1; shift;;
     -h|--help)
       usage; exit 0;;
     *)
@@ -180,339 +112,236 @@ fi
 
 info "Deploying project: $PROJECT_KEY"
 
+# ------------------------------------------------------------------------------
+# Load project config
+# ------------------------------------------------------------------------------
+
+export PTEK_PROJECT_KEY="$PROJECT_KEY"
+
+# shellcheck source=/dev/null
+source "${PTEK_APP_BASE}/lib/project_config.sh"
+
+# project_config.sh already defines prcfg()
+
+if [[ "$(prcfg project_key)" != "$PROJECT_KEY" ]]; then
+  error "Loaded project_key '$(prcfg project_key)' does not match requested '$PROJECT_KEY'"
+  exit 1
+fi
 
 # ------------------------------------------------------------------------------
-# Resolve config values
+# Resolve paths
 # ------------------------------------------------------------------------------
 
-CONFIG_BASE="$(appcfg config_base)"
-# The project repo where this project will deployed under PROJECT_KEY. i.e. $PROJECT_BASE/$PROJECT_KEY
+APP_BASE="$(appcfg app_base)"
 PROJECT_BASE="$(appcfg project_base)"
+CONFIG_BASE="$(appcfg config_base)"
 
-CONFIG_CONFIG_DIR="${CONFIG_BASE}/config"
-CONFIG_DOCKER_DIR="${CONFIG_BASE}/docker"
+BASE_DIR="$(prcfg base_dir)"
+PROJECT_DIR="${PROJECT_BASE}/${BASE_DIR}"
 
-WORDPRESS_DEPLOY_CMD="${PTEK_APP_BASE}/bin/wordpress_deploy.sh"
+DOCKER_DIR="${PROJECT_DIR}/docker"
+WORDPRESS_DIR="${PROJECT_DIR}/wordpress"
+SRC_DIR="${PROJECT_DIR}/src"
+PLUGINS_DIR="${SRC_DIR}/plugins"
+THEMES_DIR="${SRC_DIR}/themes"
+DB_DIR="${PROJECT_DIR}/db"
+
+ENV_FILE="${DOCKER_DIR}/.env"
+COMPOSE_SRC="${CONFIG_BASE}/docker/compose.project.yml"
+COMPOSE_DEST="${DOCKER_DIR}/compose.project.yml"
+
+info "Resolved paths:"
+info "  PROJECT_DIR   = ${PROJECT_DIR}"
+info "  DOCKER_DIR    = ${DOCKER_DIR}"
+info "  WORDPRESS_DIR = ${WORDPRESS_DIR}"
+info "  SRC_DIR       = ${SRC_DIR}"
+info "  PLUGINS_DIR   = ${PLUGINS_DIR}"
+info "  THEMES_DIR    = ${THEMES_DIR}"
+info "  DB_DIR        = ${DB_DIR}"
 
 # ------------------------------------------------------------------------------
-# Load project configuration
+# WHAT-IF wrappers
 # ------------------------------------------------------------------------------
-PROJECTS_FILE="${CONFIG_CONFIG_DIR}/projects.json"
 
-if [[ ! -f "$PROJECTS_FILE" ]]; then
-  error "Missing projects.json at ${PROJECTS_FILE}"
+run() {
+  if [[ "$WHAT_IF" -eq 1 ]]; then
+    info "[WHAT-IF] $*"
+  else
+    "$@"
+  fi
+}
+
+run_mkdir() {
+  if [[ "$WHAT_IF" -eq 1 ]]; then
+    info "[WHAT-IF] mkdir -p $*"
+  else
+    mkdir -p "$@"
+  fi
+}
+
+run_copy() {
+  local src="$1"
+  local dest="$2"
+  if [[ "$WHAT_IF" -eq 1 ]]; then
+    info "[WHAT-IF] cp $src $dest"
+  else
+    cp "$src" "$dest"
+  fi
+}
+
+run_write_file() {
+  local path="$1"
+  shift
+  if [[ "$WHAT_IF" -eq 1 ]]; then
+    info "[WHAT-IF] write file: $path"
+    return 0
+  fi
+  cat > "$path" <<EOF
+$*
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Safety checks
+# ------------------------------------------------------------------------------
+
+if [[ -d "$PROJECT_DIR" && "$FORCE" -ne 1 ]]; then
+  error "Project directory already exists: $PROJECT_DIR"
+  error "Use --force to allow deploying into an existing directory."
   exit 1
 fi
 
-project_config_loader
-
-PROJECT_REPO="$(prcfg project_repo)"
-PROJECT_DOMAIN="$(prcfg project_domain)"
-PROJECT_NETWORK="$(prcfg project_network)"
-
-if [[ -z "$PROJECT_REPO" ]]; then
-  error "project_repo not resolved for project '${PROJECT_KEY}'"
+if [[ ! -f "$COMPOSE_SRC" ]]; then
+  error "Missing compose.project.yml template:"
+  error "  $COMPOSE_SRC"
   exit 1
 fi
 
-info "Resolved project repo: ${PROJECT_REPO}"
-
 # ------------------------------------------------------------------------------
-# Directory scaffolding
+# Create directory structure
 # ------------------------------------------------------------------------------
-scaffold_directories() {
-  info "Scaffolding project directories"
 
-  local dirs=(
-    "${PROJECT_REPO}"
-    "${PROJECT_REPO}/docker"
-    "${PROJECT_REPO}/config"
-    "${PROJECT_REPO}/config/proxy"
-    "${PROJECT_REPO}/config/wordpress"
-    "${PROJECT_REPO}/config/sqladmin"
-    "${PROJECT_REPO}/config/doc"
-    "${PROJECT_REPO}/src"
-    "${PROJECT_REPO}/src/plugins"
-    "${PROJECT_REPO}/src/themes"
-    "${PROJECT_REPO}/logs"
-  )
+create_directories() {
+  info "Creating directory structure"
 
-  for d in "${dirs[@]}"; do
-    if [[ $WHAT_IF -eq 0 ]]; then
-      whatif "Would create directory: $d"
-    else
-      mkdir -p "$d"
-    fi
-  done
+  run_mkdir "$PROJECT_DIR"
+  run_mkdir "$DOCKER_DIR"
+  run_mkdir "$WORDPRESS_DIR"
+  run_mkdir "$SRC_DIR"
+  run_mkdir "$PLUGINS_DIR"
+  run_mkdir "$THEMES_DIR"
+  run_mkdir "$DB_DIR"
+
+  success "Directory structure prepared"
 }
 
 # ------------------------------------------------------------------------------
-# Copy docker templates CONFIG_BASE/docker → PROJECT_REPO/docker
+# Generate .env file
 # ------------------------------------------------------------------------------
-copy_docker_templates() {
-  info "Copying Docker engine templates"
 
-  if [[ ! -d "$CONFIG_DOCKER_DIR" ]]; then
-    error "Missing CONFIG_BASE/docker at ${CONFIG_DOCKER_DIR}"
-    exit 1
-  fi
-
-  if [[ $WHAT_IF -eq 0 ]]; then
-    whatif "Would copy ${CONFIG_DOCKER_DIR}/* → ${PROJECT_REPO}/docker/"
-    return
-  fi
-
-  cp -R "${CONFIG_DOCKER_DIR}/"* "${PROJECT_REPO}/docker/" 2>/dev/null || true
-  success "Docker templates copied"
-}
-
-# ------------------------------------------------------------------------------
-# Copy container configs CONFIG_BASE/config → PROJECT_REPO/config
-# ------------------------------------------------------------------------------
-copy_container_configs() {
-  info "Copying container config templates"
-
-  local src="${CONFIG_CONFIG_DIR}"
-  local dst="${PROJECT_REPO}/config"
-
-  local dirs=(
-    proxy
-    wordpress
-    sqladmin
-    doc
-  )
-
-  for d in "${dirs[@]}"; do
-    if [[ -d "$src/$d" ]]; then
-      if [[ $WHAT_IF -eq 0 ]]; then
-        whatif "Would copy $src/$d → $dst/$d"
-      else
-        mkdir -p "$dst/$d"
-        cp -R "$src/$d/"* "$dst/$d/" 2>/dev/null || true
-      fi
-    else
-      warn "Missing container config directory: $src/$d"
-    fi
-  done
-
-  success "Container config templates copied"
-}
-
-# ------------------------------------------------------------------------------
-# Provision dev_sources (local + remote git)
-# ------------------------------------------------------------------------------
-provision_dev_sources() {
-  info "Provisioning dev_sources for project '${PROJECT_KEY}'"
-
-  local plugins_count themes_count
-
-  plugins_count=$(jq ".projects.\"${PROJECT_KEY}\".dev_sources.plugins | length" "${PROJECTS_FILE}")
-  themes_count=$(jq ".projects.\"${PROJECT_KEY}\".dev_sources.themes | length" "${PROJECTS_FILE}")
-
-  # -------------------------
-  # Plugins
-  # -------------------------
-  if (( plugins_count > 0 )); then
-    info "Provisioning plugin dev sources"
-
-    for i in $(seq 0 $((plugins_count - 1))); do
-      local name source type init_git
-      name=$(jq -r ".projects.\"${PROJECT_KEY}\".dev_sources.plugins[$i].name" "${PROJECTS_FILE}")
-      source=$(jq -r ".projects.\"${PROJECT_KEY}\".dev_sources.plugins[$i].source" "${PROJECTS_FILE}")
-      type=$(jq -r ".projects.\"${PROJECT_KEY}\".dev_sources.plugins[$i].type" "${PROJECTS_FILE}")
-      init_git=$(jq -r ".projects.\"${PROJECT_KEY}\".dev_sources.plugins[$i].init_git // false" "${PROJECTS_FILE}")
-
-      local dst="${PROJECT_REPO}/src/plugins/${name}"
-
-      if [[ -d "$dst" ]]; then
-        warn "Plugin '${name}' already exists — skipping"
-        continue
-      fi
-
-      case "$type" in
-        local)
-          if [[ $WHAT_IF -eq 0 ]]; then
-            whatif "Would copy local plugin '${name}' from ${source} → ${dst}"
-          else
-            mkdir -p "$dst"
-            cp -R "${source}/"* "$dst/" 2>/dev/null || true
-            info "Copied plugin '${name}' → ${dst}"
-          fi
-          ;;
-
-        remote)
-          if [[ $WHAT_IF -eq 0 ]]; then
-            whatif "Would clone remote plugin '${name}' from ${source} → ${dst}"
-          else
-            git clone "$source" "$dst"
-            info "Cloned plugin '${name}' → ${dst}"
-
-            if [[ "$init_git" == "false" ]]; then
-              rm -rf "${dst}/.git"
-              info "Removed .git directory for plugin '${name}' (init_git=false)"
-            fi
-          fi
-          ;;
-
-        *)
-          warn "Unknown dev_source type '${type}' for plugin '${name}' — skipping"
-          ;;
-      esac
-    done
-  fi
-
-  # -------------------------
-  # Themes
-  # -------------------------
-  if (( themes_count > 0 )); then
-    info "Provisioning theme dev sources"
-
-    for i in $(seq 0 $((themes_count - 1))); do
-      local name source type init_git
-      name=$(jq -r ".projects.\"${PROJECT_KEY}\".dev_sources.themes[$i].name" "${PROJECTS_FILE}")
-      source=$(jq -r ".projects.\"${PROJECT_KEY}\".dev_sources.themes[$i].source" "${PROJECTS_FILE}")
-      type=$(jq -r ".projects.\"${PROJECT_KEY}\".dev_sources.themes[$i].type" "${PROJECTS_FILE}")
-      init_git=$(jq -r ".projects.\"${PROJECT_KEY}\".dev_sources.themes[$i].init_git // false" "${PROJECTS_FILE}")
-
-      local dst="${PROJECT_REPO}/src/themes/${name}"
-
-      if [[ -d "$dst" ]]; then
-        warn "Theme '${name}' already exists — skipping"
-        continue
-      fi
-
-      case "$type" in
-        local)
-          if [[ $WHAT_IF -eq 0 ]]; then
-            whatif "Would copy local theme '${name}' from ${source} → ${dst}"
-          else
-            mkdir -p "$dst"
-            cp -R "${source}/"* "$dst/" 2>/dev/null || true
-            info "Copied theme '${name}' → ${dst}"
-          fi
-          ;;
-
-        remote)
-          if [[ $WHAT_IF -eq 0 ]]; then
-            whatif "Would clone remote theme '${name}' from ${source} → ${dst}"
-          else
-            git clone "$source" "$dst"
-            info "Cloned theme '${name}' → ${dst}"
-
-            if [[ "$init_git" == "false" ]]; then
-              rm -rf "${dst}/.git"
-              info "Removed .git directory for theme '${name}' (init_git=false)"
-            fi
-          fi
-          ;;
-
-        *)
-          warn "Unknown dev_source type '${type}' for theme '${name}' — skipping"
-          ;;
-      esac
-    done
-  fi
-
-  success "dev_sources provisioned"
-}
-
-# ------------------------------------------------------------------------------
-# Generate project-level .env
-# ------------------------------------------------------------------------------
 generate_env_file() {
-  local tpl="${CONFIG_CONFIG_DIR}/env.project.tpl"
-  local env_file="${PROJECT_REPO}/docker/.env"
+  info "Generating project .env file at: $ENV_FILE"
 
-  info "Generating project-level .env → ${env_file}"
+  run_write_file "$ENV_FILE" "\
+# Generated by project_deploy.sh for project: $(prcfg project_key)
 
-  if [[ ! -f "$tpl" ]]; then
-    error "Missing env.project.tpl at ${tpl}"
-    exit 1
-  fi
+PROJECT_KEY=$(prcfg project_key)
+PROJECT_DOMAIN=$(prcfg domain)
 
-  if [[ $WHAT_IF -eq 0 ]]; then
-    whatif "Would generate ${env_file} from ${tpl}"
-    return
-  fi
+BACKEND_NETWORK=$(appcfg backend_network)
+PROJECT_NETWORK=$(prcfg network)
 
-  : > "$env_file"
+SQLDB_IMAGE=$(appcfg database.sqldb_image)
+SQLDB_VERSION=$(appcfg database.sqldb_version)
+SQLDB_PORT=$(appcfg database.sqldb_port)
 
-  while IFS= read -r line; do
-    line=$(echo "$line" \
-      | sed "s|{{project_key}}|${PROJECT_KEY}|g" \
-      | sed "s|{{project_domain}}|${PROJECT_DOMAIN}|g" \
-      | sed "s|{{project_network}}|${PROJECT_NETWORK}|g"
-    )
-    echo "$line" >> "$env_file"
-  done < "$tpl"
+SQLDB_NAME=$(prcfg secrets.sqldb_name)
+SQLDB_USER=$(prcfg secrets.sqldb_user)
+SQLDB_PASS=$(prcfg secrets.sqldb_pass)
 
-  success ".env created"
+WORDPRESS_IMAGE=$(appcfg wordpress_defaults.image)
+WORDPRESS_HTTP_PORT=$(prcfg http_port)
+WORDPRESS_HTTPS_PORT=$(prcfg https_port)
+
+WP_ADMIN_USER=$(prcfg secrets.wp_admin_user)
+WP_ADMIN_PASS=$(prcfg secrets.wp_admin_pass)
+WP_ADMIN_EMAIL=$(prcfg secrets.wp_admin_email)
+
+ASSETS_CONTAINER=$(appcfg assets.container)
+ASSETS_ROOT=$(appcfg assets.root)
+"
+
+  success ".env file generated"
 }
 
 # ------------------------------------------------------------------------------
-# Generate compose.project.yml
+# Copy compose.project.yml
 # ------------------------------------------------------------------------------
-generate_compose_file() {
-  local tpl="${CONFIG_DOCKER_DIR}/compose.project.yml"
-  local out="${PROJECT_REPO}/docker/compose.project.yml"
 
-  info "Generating compose.project.yml → ${out}"
+copy_compose_file() {
+  info "Copying compose.project.yml from CONFIG_BASE/docker"
 
-  if [[ ! -f "$tpl" ]]; then
-    error "Missing compose.project.yml at ${tpl}"
-    exit 1
-  fi
+  run_copy "$COMPOSE_SRC" "$COMPOSE_DEST"
 
-  if [[ $WHAT_IF -eq 0 ]]; then
-    whatif "Would generate ${out} from ${tpl}"
-    return
-  fi
-
-  sed \
-    -e "s|{{project_key}}|${PROJECT_KEY}|g" \
-    -e "s|{{project_domain}}|${PROJECT_DOMAIN}|g" \
-    -e "s|{{project_network}}|${PROJECT_NETWORK}|g" \
-    "$tpl" > "$out"
-
-  success "compose.project.yml created"
+  success "compose.project.yml copied"
 }
 
 # ------------------------------------------------------------------------------
-# Delegate WordPress provisioning
+# Provision WordPress (optional)
 # ------------------------------------------------------------------------------
 
-deploy_wordpress() {
-  info "Delegating WordPress provisioning to wordpress_deploy.sh"
-
-  if [[ ! -f "$WORDPRESS_DEPLOY_CMD" ]]; then
-    error "Missing wordpress_deploy.sh at ${WORDPRESS_DEPLOY_CMD}"
-    exit 1
+provision_wordpress() {
+  if [[ "$AUTO_WORDPRESS" -eq 0 ]]; then
+    info "Skipping WordPress provisioning (no --auto-wordpress)"
+    return 0
   fi
 
-  if [[ $WHAT_IF -eq 0 ]]; then
-    whatif "Would run wordpress_deploy.sh --project ${PROJECT_KEY}"
-    return
+  info "Provisioning WordPress via wordpress_deploy.sh"
+
+  local cmd=("${PTEK_APP_BASE}/bin/wordpress_deploy.sh" "--project" "$PROJECT_KEY")
+
+  if [[ "$WHAT_IF" -eq 1 ]]; then
+    info "[WHAT-IF] ${cmd[*]}"
+    return 0
   fi
 
-  "${WORDPRESS_DEPLOY_CMD}" --project "${PROJECT_KEY}"
+  "${cmd[@]}"
+
   success "WordPress provisioning completed"
 }
 
 # ------------------------------------------------------------------------------
-# Dispatcher
+# Auto-launch project (optional)
 # ------------------------------------------------------------------------------
-dispatch() {
-  scaffold_directories
-  copy_container_configs
-  provision_dev_sources
-  generate_env_file
-  #generate_compose_file
-  copy_docker_templates
-  if [[ $WORDPRESS_CORE -eq 0 ]]; then
-    deploy_wordpress
+
+auto_launch() {
+  if [[ "$AUTO_LAUNCH" -eq 0 ]]; then
+    info "Skipping project launch (no --auto-launch)"
+    return 0
   fi
-  success "Project '${PROJECT_KEY}' deployed"
+
+  info "Launching project via project_launch.sh"
+
+  local cmd=("${PTEK_APP_BASE}/bin/project_launch.sh" "--project" "$PROJECT_KEY" "start")
+
+  if [[ "$WHAT_IF" -eq 1 ]]; then
+    info "[WHAT-IF] ${cmd[*]}"
+    return 0
+  fi
+
+  "${cmd[@]}"
+
+  success "Project launched"
 }
 
-dispatch
-exit 0
+# ------------------------------------------------------------------------------
+# Main
+# ------------------------------------------------------------------------------
+
+create_directories
+generate_env_file
+copy_compose_file
+provision_wordpress
+auto_launch
+
+success "Project deployment completed for: $(prcfg project_key)"
