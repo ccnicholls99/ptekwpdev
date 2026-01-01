@@ -36,9 +36,15 @@ trap ptekwp_cleanup EXIT
 # ------------------------------------------------------------------------------
 # Load app config + logging
 # ------------------------------------------------------------------------------
+# Resolve APP_BASE as the parent directory of this script's directory
+PTEK_APP_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # shellcheck source=/dev/null
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/app_config.sh"
+source "${PTEK_APP_BASE}/lib/app_config.sh"
+
+#echo "LOGDIR=$(appcfg app_log_dir)"
+#echo "CONTAINER=$(appcfg assets_container)"
+#echo "ROOT=$(appcfg assets_root)"
 
 # Major script → initialize its own logfile
 set_log --truncate "$(appcfg app_log_dir)/assets_bootstrap.log" \

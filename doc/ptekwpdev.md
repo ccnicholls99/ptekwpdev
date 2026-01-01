@@ -99,7 +99,7 @@ T1 -. "mounted into" .-> T3
 
 # **PTEKWPDEV**
 
-At its core, PTEKWPDEV orchestrates three major layers:
+At its core, PTEKWPDEV orchestrates four major layers:
 
 ## **1. The Assets Layer**
 An independent external volume available to all projects. The assets volume is a local global resource for packaged distros that may not be available from 

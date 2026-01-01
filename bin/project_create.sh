@@ -19,56 +19,10 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-# ------------------------------------------------------------------------------
-# Preserve caller directory
-# ------------------------------------------------------------------------------
-CALLER_PWD="$(pwd)"
-cleanup() { cd "$CALLER_PWD" || true; }
-trap cleanup EXIT
-
-# ------------------------------------------------------------------------------
-# Resolve APP_BASE and load libraries
-# ------------------------------------------------------------------------------
-APP_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-
-# shellcheck source=/dev/null
-source "${APP_BASE}/lib/output.sh"
-source "${APP_BASE}/lib/helpers.sh"
-source "${APP_BASE}/lib/app_config.sh"
-
-set_log --truncate "$(appcfg app_log_dir)/project_create.log" \
-  "=== Project Create Run ($(date)) ==="
-
-# ------------------------------------------------------------------------------
-# Resolve CONFIG_BASE
-# ------------------------------------------------------------------------------
-CONFIG_BASE="$(appcfg config_base)"
-PROJECTS_FILE="${CONFIG_BASE}/config/projects.json"
-
-if [[ ! -f "$PROJECTS_FILE" ]]; then
-  error "Missing projects.json at ${PROJECTS_FILE}"
-  exit 1
-fi
-
-# ------------------------------------------------------------------------------
-# Variables
-# ------------------------------------------------------------------------------
-PROJECT=""
-PROJECT_TITLE=""
-PROJECT_DESCRIPTION=""
-DOMAIN=""
-NETWORK=""
-BASE_DIR=""
-WP_IMAGE=""
-WP_HOST=""
-PORT=""
-SSL_PORT=""
-WHAT_IF=false
-DEV_FLAGS=()
-
-# ------------------------------------------------------------------------------
-# Usage
-# ------------------------------------------------------------------------------
+#
+# usage():
+# Print command options
+#
 usage() {
   cat <<EOF
 Usage: project_create.sh [options]
@@ -95,6 +49,81 @@ Notes:
 EOF
 }
 
+print_summary() {
+  echo
+  echo "Published to $PROJECTS_FILE..."
+  echo "  Project:   $PROJECT"
+  echo "  Title:     $PROJECT_TITLE"
+  echo "  Desc:      $PROJECT_DESCRIPTION"
+  echo "  Domain:    $DOMAIN"
+  echo "  Network:   $NETWORK"
+  echo "  Base dir:  $BASE_DIR"
+  echo "  WP Image:  $WP_IMAGE"
+  echo "  WP Host:   $WP_HOST"
+  echo "  Ports:     $PORT / $SSL_PORT"
+  echo "  SQLDB:     $SQLDB_NAME"
+  echo "  DB User:   $SQLDB_USER"
+  echo "  WP User:   $WP_ADMIN_USER"
+  echo "  Dev flags: ${#DEV_FLAGS[@]}"
+  echo
+  echo "Next steps:"
+  echo "  project_deploy.sh --project ${PROJECT} --action deploy"
+  echo
+}
+
+
+# ------------------------------------------------------------------------------
+# Preserve caller directory
+# ------------------------------------------------------------------------------
+CALLER_PWD="$(pwd)"
+cleanup() { cd "$CALLER_PWD" || true; }
+trap cleanup EXIT
+
+# ------------------------------------------------------------------------------
+# Resolve APP_BASE and load libraries
+# ------------------------------------------------------------------------------
+PTEK_APP_BASE="$(
+  cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd
+)"
+export PTEK_APP_BASE
+
+CHECK_FILE="${PTEK_APP_BASE}/lib/app_config.sh"
+# shellcheck source=/dev/null
+if [[ -f $CHECK_FILE ]]; then
+  source "$CHECK_FILE"
+else
+  printf "ERROR: Cannot locate app_config library at %s\n" "$CHECK_FILE"
+  exit 1
+fi
+CHECK_FILE="${PTEK_APP_BASE}/lib/helpers.sh"
+# shellcheck source=/dev/null
+if [[ -f $CHECK_FILE ]]; then
+  source "$CHECK_FILE"
+else
+  printf "ERROR: Cannot locate helpers library at %s\n" "$CHECK_FILE"
+  exit 1
+fi
+CHECK_FILE=""
+
+set_log --truncate "$(appcfg app_log_dir)/project_create.log" \
+  "=== Project Create Run ($(date)) ==="
+
+CONFIG_BASE=
+PROJECTS_FILE=
+PROJECT=""
+PROJECT_TITLE=""
+PROJECT_DESCRIPTION=""
+DOMAIN=""
+NETWORK=""
+BASE_DIR=""
+WP_IMAGE=""
+WP_HOST=""
+PORT=""
+SSL_PORT=""
+# 0 to enable, any non-zero value to disable
+WHAT_IF=1     
+DEV_FLAGS=()
+
 # ------------------------------------------------------------------------------
 # Parse flags
 # ------------------------------------------------------------------------------
@@ -114,11 +143,31 @@ while [[ $# -gt 0 ]]; do
         DEV_FLAGS+=("$1" "$2")
         shift 2
         ;;
-    -w|--what-if) WHAT_IF=true; shift ;;
+    -w|--what-if) WHAT_IF=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) error "Unknown option: $1"; usage; exit 1 ;;
   esac
 done
+
+# ------------------------------------------------------------------------------
+# Resolve CONFIG_BASE
+# ------------------------------------------------------------------------------
+CONFIG_BASE="$(appcfg config_base)"
+PROJECTS_FILE="${CONFIG_BASE}/config/projects.json"
+
+# Ensure projects.json exists
+if [[ ! -f "$PROJECTS_FILE" ]]; then
+  if [[ $WHAT_IF -eq 0 ]]; then
+    whatif "projects.json not found. Would create $PROJECTS_FILE"
+  else
+    info "projects.json missing — creating new registry"
+    mkdir -p "$(dirname "$PROJECTS_FILE")"
+    echo '{ "projects": {} }' > "$PROJECTS_FILE"
+  fi
+  success "Created new projects.json"
+elif [[ $WHAT_IF -eq 0 ]]; then
+  whatif "$PROJECTS_FILE exists. Would add new project config"
+fi
 
 # ------------------------------------------------------------------------------
 # Require project key
@@ -147,12 +196,12 @@ fi
 DEFAULT_DOMAIN="${PROJECT}.local"
 DEFAULT_TITLE="${PROJECT}"
 DEFAULT_DESCRIPTION="A new WordPress site for ${PROJECT}"
-DEFAULT_NETWORK="ptekwpdev_${PROJECT}_net"
+DEFAULT_NETWORK="$(appcfg app_key)_${PROJECT}_net"
 DEFAULT_BASE_DIR="${PROJECT}"
-DEFAULT_WP_IMAGE="$(appcfg wordpress_default_image)"
+DEFAULT_WP_IMAGE="$(appcfg wordpress_defaults.image)"
 DEFAULT_WP_HOST="${PROJECT}.local"
-DEFAULT_PORT="8080"
-DEFAULT_SSL_PORT="8443"
+DEFAULT_PORT="$(appcfg wordpress_defaults.port)"
+DEFAULT_SSL_PORT="$(appcfg wordpress_defaults.ssl_port)"
 
 # Apply defaults if missing
 PROJECT_TITLE="${PROJECT_TITLE:-$DEFAULT_TITLE}"
@@ -168,7 +217,7 @@ SSL_PORT="${SSL_PORT:-$DEFAULT_SSL_PORT}"
 # ------------------------------------------------------------------------------
 # Show defaults and ask if user wants to override
 # ------------------------------------------------------------------------------
-if ! $WHAT_IF; then
+if [[ $WHAT_IF -ne 0 ]]; then
   info "Using defaults for project '${PROJECT}':"
   echo "  Title:     $PROJECT_TITLE"
   echo "  Desc:      $PROJECT_DESCRIPTION"
@@ -219,11 +268,19 @@ generate_secret() {
 
 SQLDB_NAME="${PROJECT}_db"
 SQLDB_USER="${PROJECT}_user"
-SQLDB_PASS="$(generate_secret)"
+if [[ $WHAT_IF -eq 0 ]]; then
+  SQLDB_PASS="***secret***"
+else
+  SQLDB_PASS="$(generate_secret)"
+fi
 
 WP_ADMIN_USER="admin"
-WP_ADMIN_PASS="$(generate_secret)"
 WP_ADMIN_EMAIL="admin@${DOMAIN}"
+if [[ $WHAT_IF -eq 0 ]]; then
+  WP_ADMIN_PASS="***secret***"
+else
+  WP_ADMIN_PASS="$(generate_secret)"
+fi 
 
 # ------------------------------------------------------------------------------
 # Build JSON block
@@ -276,7 +333,7 @@ project_block=$(jq -n \
 # ------------------------------------------------------------------------------
 info "Adding project '${PROJECT}' to projects.json"
 
-if $WHAT_IF; then
+if [[ $WHAT_IF -eq 0 ]]; then
   whatif "Would insert project block into ${PROJECTS_FILE}"
   echo "$project_block"
 else
@@ -291,16 +348,16 @@ fi
 # ------------------------------------------------------------------------------
 if [[ ${#DEV_FLAGS[@]} -gt 0 ]]; then
   info "Forwarding dev-source flags to project_dev_sources.sh"
-  if $WHAT_IF; then
+  if [[ $WHAT_IF -eq 0 ]]; then
     whatif "Would run project_dev_sources.sh --project ${PROJECT} ${DEV_FLAGS[*]}"
   else
-    "${APP_BASE}/bin/project_dev_sources.sh" --project "${PROJECT}" "${DEV_FLAGS[@]}"
+    "${PTEK_APP_BASE}/bin/project_dev_sources.sh" --project "${PROJECT}" "${DEV_FLAGS[@]}"
   fi
 else
-  if ! $WHAT_IF; then
+  if [[ $WHAT_IF -ne 0 ]]; then
     read -rp "Add dev sources now? (y/n): " add_dev
     if [[ "$add_dev" =~ ^[Yy]$ ]]; then
-      "${APP_BASE}/bin/project_dev_sources.sh" --project "${PROJECT}" --interactive
+      "${PTEK_APP_BASE}/bin/project_dev_sources.sh" --project "${PROJECT}" --interactive
     fi
   fi
 fi
@@ -308,10 +365,10 @@ fi
 # ------------------------------------------------------------------------------
 # Optional: Deploy now
 # ------------------------------------------------------------------------------
-if ! $WHAT_IF; then
+if [[ $WHAT_IF -ne 0 ]]; then
   read -rp "Deploy project now? (y/n): " deploy_now
   if [[ "$deploy_now" =~ ^[Yy]$ ]]; then
-    "${APP_BASE}/bin/project_deploy.sh" --project "${PROJECT}" --action deploy
+    "${PTEK_APP_BASE}/bin/project_deploy.sh" --project "${PROJECT}" --action deploy
   fi
 else
   whatif "Would run project_deploy.sh --project ${PROJECT} --action deploy"
@@ -322,21 +379,6 @@ fi
 # ------------------------------------------------------------------------------
 success "Project creation complete"
 
-echo
-echo "Summary:"
-echo "  Project:   $PROJECT"
-echo "  Title:     $PROJECT_TITLE"
-echo "  Desc:      $PROJECT_DESCRIPTION"
-echo "  Domain:    $DOMAIN"
-echo "  Network:   $NETWORK"
-echo "  Base dir:  $BASE_DIR"
-echo "  WP Image:  $WP_IMAGE"
-echo "  WP Host:   $WP_HOST"
-echo "  Ports:     $PORT / $SSL_PORT"
-echo "  Dev flags: ${#DEV_FLAGS[@]}"
-echo
-echo "Next steps:"
-echo "  project_deploy.sh --project ${PROJECT} --action deploy"
-echo
+print_summary
 
 exit 0

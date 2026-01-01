@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#  PTEKWPDEV — App Bootstrap Script (Final Hardened Version)
+#  PTEKWPDEV — App Bootstrap Script
+#  Script: app_bootstrap.sh
+#  Synopsis:
+#    Initialize the application by generating app.json from defaults and
+#    optional overrides in app.config.
+#
+#  Description:
+#    - APP_BASE/app/config/app.json is the canonical static configuration.
+#    - APP_BASE/app/config/app.config contains flat key=value overrides.
+#    - This script merges app.config into app.json, expanding env vars.
+#    - app.json is only overwritten with --force.
+#
+#  Notes:
+#    - Must be executed from anywhere; APP_BASE is resolved automatically.
+#    - Uses Option C logging.
+#    - Never exports environment variables.
 # ==============================================================================
 
 set -o errexit
@@ -8,225 +23,121 @@ set -o nounset
 set -o pipefail
 
 # ------------------------------------------------------------------------------
-# Preserve caller directory
+# Resolve APP_BASE before anything else
 # ------------------------------------------------------------------------------
-PTEK_CALLER_PWD="$(pwd)"
-ptekwp_cleanup() { cd "$PTEK_CALLER_PWD" || true; }
-trap ptekwp_cleanup EXIT
+
+PTEK_APP_BASE="$(
+  cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd
+)"
+export PTEK_APP_BASE
 
 # ------------------------------------------------------------------------------
-# Resolve APP_BASE
+# Load logging + config helpers
 # ------------------------------------------------------------------------------
-APP_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# shellcheck source=/dev/null
+source "${PTEK_APP_BASE}/lib/app_config.sh"
+
+APP_CONFIG_FILE="${PTEK_APP_BASE}/app/config/app.config"
+APP_JSON_FILE="${PTEK_APP_BASE}/app/config/app.json"
+
+set_log --truncate "$(appcfg app_log_dir)/app_bootstrap.log" \
+  "=== App Bootstrap Run ($(date)) ==="
 
 # ------------------------------------------------------------------------------
-# Load logging utilities
+# Usage
 # ------------------------------------------------------------------------------
-if [[ -f "$APP_BASE/lib/output.sh" ]]; then
-  # shellcheck source=/dev/null
-  source "$APP_BASE/lib/output.sh"
-else
-  echo "$APP_BASE/lib/output.sh not found. Aborting."
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [--force]
+
+Options:
+  --force     Overwrite existing app.json
+
+Description:
+  Generates app.json by merging defaults with overrides from app.config.
+EOF
+}
+
+FORCE=0
+if [[ "${1:-}" == "--force" ]]; then
+  FORCE=1
+fi
+
+# ------------------------------------------------------------------------------
+# Ensure app.config exists (generate from app.json if missing)
+# ------------------------------------------------------------------------------
+
+generate_app_config_from_json() {
+  info "Generating default app.config from app.json"
+
+  jq -r '
+    def flatten($prefix):
+      to_entries
+      | map(
+          if .value | type == "object" then
+            (.value | flatten($prefix + .key + "."))[]
+          else
+            { key: ($prefix + .key), value: .value }
+          end
+        );
+    flatten("") | .key + "=" + (.value|tostring)
+  ' "$APP_JSON_FILE" > "$APP_CONFIG_FILE"
+
+  success "Generated app.config from app.json"
+}
+
+if [[ ! -f "$APP_CONFIG_FILE" ]]; then
+  generate_app_config_from_json
+fi
+
+# ------------------------------------------------------------------------------
+# Merge app.config overrides into JSON
+# ------------------------------------------------------------------------------
+
+merge_overrides() {
+  local jq_cmd="."
+
+  while IFS= read -r line; do
+    # Trim whitespace
+    line="${line#"${line%%[![:space:]]*}"}"
+
+    # Skip empty lines
+    [[ -z "$line" ]] && continue
+
+    # Skip comments
+    [[ "${line:0:1}" == "#" ]] && continue
+
+    # Split key=value
+    key="${line%%=*}"
+    value="${line#*=}"
+
+    # Expand env vars: $HOME, ~, $APP_KEY, etc.
+    expanded_value="$(eval echo "$value")"
+
+    info "Applying override: ${key}=${expanded_value}"
+
+    # Append to jq command
+    jq_cmd+=" | .${key} = \"${expanded_value}\""
+  done < "$APP_CONFIG_FILE"
+
+  # Apply jq merge
+  jq "$jq_cmd" "$APP_JSON_FILE"
+}
+
+# ------------------------------------------------------------------------------
+# Main Logic
+# ------------------------------------------------------------------------------
+
+if [[ -f "$APP_JSON_FILE" && "$FORCE" -ne 1 ]]; then
+  error "app.json already exists. Use --force to overwrite from app.config."
   exit 1
 fi
 
-LOG_DIR="$APP_BASE/app/logs"
-mkdir -p "$LOG_DIR"
-set_log --truncate "$LOG_DIR/app_bootstrap.log" "=== App Bootstrap Run ($(date)) ==="
+info "Merging app.config overrides into app.json"
 
-# ------------------------------------------------------------------------------
-# Flags
-# ------------------------------------------------------------------------------
-CONFIG_BASE="$HOME/.ptekwpdev"
-PROJECT_BASE="$HOME/ptekwpdev_repo"
-WHAT_IF=false
-NO_PROMPT=false
-FORCE=false
+merge_overrides > "${APP_JSON_FILE}.tmp"
+mv "${APP_JSON_FILE}.tmp" "$APP_JSON_FILE"
 
-print_usage() {
-  echo "Usage: $0 [options]"
-  echo "  --config-base <path>"
-  echo "  --project-base <path>"
-  echo "  -w | --what-if"
-  echo "  -n | --no-prompt"
-  echo "  -f | --force"
-  echo "  -h | --help"
-}
-
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --config-base) CONFIG_BASE="$2"; shift 2 ;;
-    --project-base) PROJECT_BASE="$2"; shift 2 ;;
-    -w|--what-if) WHAT_IF=true; shift ;;
-    -n|--no-prompt) NO_PROMPT=true; shift ;;
-    -f|--force) FORCE=true; shift ;;
-    -h|--help) print_usage; exit 0 ;;
-    *) echo "Unknown option: $1"; exit 1 ;;
-  esac
-done
-
-if [[ -z "$CONFIG_BASE" ]]; then error "CONFIG_BASE cannot be empty."; exit 1; fi
-if [[ -z "$PROJECT_BASE" ]]; then error "PROJECT_BASE cannot be empty."; exit 1; fi
-
-if [[ "$WHAT_IF" == true ]]; then
-  whatif "------------------------------------------------------------"
-  whatif "  WHAT-IF MODE ENABLED — NO CHANGES WILL BE WRITTEN"
-  whatif "------------------------------------------------------------"
-fi
-
-# ------------------------------------------------------------------------------
-# Safe secret generator (ASCII-only, JSON-safe)
-# ------------------------------------------------------------------------------
-generate_secret() {
-  LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 32 || true
-}
-
-generate_secret_keys() {
-  
-  info "Generating secrets key values..."
-
-  SQLDB_ROOT_USER="root"
-  if [[ "$WHAT_IF" == true ]]; then
-    SQLDB_ROOT_PASS="**secret**"
-    whatif "Dummy Secrets key values created"
-  else
-    SQLDB_ROOT_PASS="$(generate_secret)"
-    success "Secrets key values created"
-  fi
-
-}
-
-# ------------------------------------------------------------------------------
-# JSON-safe string escaper (newline-safe)
-# ------------------------------------------------------------------------------
-json_escape() {
-  printf '%s' "$1" | jq -R . | tr -d '\n'
-}
-
-# ------------------------------------------------------------------------------
-# Paths
-# ------------------------------------------------------------------------------
-APP_JSON="$APP_BASE/app/config/app.json"
-SCHEMA_PATH="$APP_BASE/app/config/schema/app.schema.json"
-
-# ------------------------------------------------------------------------------
-# Directory scaffolding
-# ------------------------------------------------------------------------------
-create_directory_structure() {
-  info "Preparing directory structure..."
-
-  REQUIRED_DIRS=(
-    "$APP_BASE/app/config"
-    "$CONFIG_BASE"
-    "$CONFIG_BASE/config"
-    "$PROJECT_BASE"
-  )
-
-  for dir in "${REQUIRED_DIRS[@]}"; do
-    if [[ "$WHAT_IF" == true ]]; then
-      whatif "WHAT-IF: Would create directory: $dir"
-    else
-      mkdir -p "$dir"
-      info "Ensured: $dir"
-    fi
-  done
-  
-  #echo "DEBUG: after scaffolding, exit code=$?" >&2
-
-  info "Directory scaffolding complete."
-}
-
-# ------------------------------------------------------------------------------
-# Write app.json
-# ------------------------------------------------------------------------------
-write_app_json() {
-
-  info "Generating app.json → $APP_JSON"
-  local esc_pass
-  esc_pass=$(json_escape "$SQLDB_ROOT_PASS")
-
-  local json_content
-  json_content="$(cat <<EOF
-{
-  "app_key": "ptekwpdev",
-  "app_base": "$APP_BASE",
-  "config_base": "$CONFIG_BASE",
-  "project_base": "$PROJECT_BASE",
-
-  "backend_network": "ptekwpdev_backend",
-
-  "secrets": {
-    "sqldb_root": "$SQLDB_ROOT_USER",
-    "sqldb_root_pass": $esc_pass
-  },
-
-  "database": {
-    "sqldb_port": "3306",
-    "sqldb_image": "mariadb",
-    "sqldb_version": "10.5",
-
-    "sqladmin_image": "phpmyadmin/phpmyadmin",
-    "sqladmin_version": "latest",
-    "sqladmin_port": "5211"
-  },
-
-  "assets": {
-    "container": "ptekwpdev_assets",
-    "root_path": "/usr/src/ptekwpdev/assets"
-  },
-
-  "wordpress_defaults": {
-    "image": "wordpress:latest",
-    "php_version": "8.2",
-    "port": 8080,
-    "ssl_port": "8443"
-  }
-}
-EOF
-)"
-
-  if [[ "$WHAT_IF" == true ]]; then
-    whatif "WHAT-IF: Would write app.json:"
-    whatif "$json_content"
-    return 0
-  fi
-
-  if [[ -f "$APP_JSON" && "$FORCE" != true ]]; then
-    error "$APP_JSON already exists. Use --force to overwrite."
-    exit 1
-  fi
-
-  # TODO: Re-enable schema validation once Ajv meta-schema handling is fixed.
-  # validate_schema "$json_content"
-
-  echo "$json_content" > "$APP_JSON"
-  success "Wrote app.json → $APP_JSON"
-}
-
-# ------------------------------------------------------------------------------
-# Deploy to CONFIG_BASE
-# ------------------------------------------------------------------------------
-deploy_app_config() {
-  local dest="$CONFIG_BASE/config/app.json"
-
-  if [[ "$WHAT_IF" == true ]]; then
-    whatif "WHAT-IF: Would copy $APP_JSON → $dest"
-    return 0
-  fi
-
-  cp "$APP_JSON" "$dest"
-  success "CONFIG_BASE initialized at $dest"
-}
-
-# ------------------------------------------------------------------------------
-# Orchestrator
-# ------------------------------------------------------------------------------
-bootstrap_app() {
-  create_directory_structure
-  generate_secret_keys
-  write_app_json
-  deploy_app_config
-}
-
-bootstrap_app
-success "App bootstrap complete."
+success "app.json generated successfully at: $APP_JSON_FILE"

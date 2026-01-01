@@ -115,12 +115,16 @@ fi
 # Derive static repo paths (not stored in JSON)
 # ------------------------------------------------------------------------------
 
+# ------------------------------------------------------------------------------
+# Derive static repo paths (not stored in JSON)
+# ------------------------------------------------------------------------------
 PTEKWPCFG[app_config_dir]="${PTEK_APP_BASE}/app/config"
 PTEKWPCFG[app_log_dir]="${PTEK_APP_BASE}/app/logs"
 PTEKWPCFG[app_bin_dir]="${PTEK_APP_BASE}/bin"
 PTEKWPCFG[app_assets_dir]="${PTEK_APP_BASE}/app/assets"
 
-PTEKWPCFG[environments_file]="${PTEKWPCFG[config_base]}/environments.json"
+# Canonical runtime project registry
+PTEKWPCFG[projects_file]="${PTEKWPCFG[config_base]}/config/projects.json"
 
 # ------------------------------------------------------------------------------
 # Load logging utilities (does NOT initialize logging)
