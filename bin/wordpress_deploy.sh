@@ -11,6 +11,7 @@
 # Usage:
 #   wordpress_deploy.sh <PROJECT> [--what-if|-w] [--verbose|-v]
 #
+set -euo pipefail
 
 # -----------------------------------------------------------------------------
 # Resolve APP_BASE (canonical pattern)
@@ -20,22 +21,25 @@ PTEK_APP_BASE="$(
 )"
 export PTEK_APP_BASE
 
-set -euo pipefail
-
 # -----------------------------------------------------------------------------
 # Load core libs
 # -----------------------------------------------------------------------------
 
 # app_config.sh
-source "${PTEK_APP_BASE}/lib/app_config.sh"
+CHECK_FILE="${PTEK_APP_BASE}/lib/app_config.sh"
+if [[ -f $CHECK_FILE ]]; then
+  source "$CHECK_FILE"
+else
+  printf "ERROR: App Config could not located at %s\n" "$CHECK_FILE"
+  exit 1
+fi
+CHECK_FILE=
 
-# project_config.sh (defines project_config_load, prcfg, project_resolve_repo)
-source "${PTEK_APP_BASE}/lib/project_config.sh"
 
 # Safe accessor
-prcfg_or_empty() {
-  prcfg "$1" 2>/dev/null || echo ""
-}
+#prcfg_or_empty() {
+#  prcfg "$1" 2>/dev/null || echo ""
+#}
 
 # -----------------------------------------------------------------------------
 # Globals
@@ -43,9 +47,9 @@ prcfg_or_empty() {
 
 WHAT_IF=false
 VERBOSE=false
-PROJECT=""
+PROJECT_KEY=""
 
-PROJECT_ROOT=""
+PROJECT_REPO=""
 WORDPRESS_DIR=""
 MANIFEST_FILE=""
 
@@ -65,7 +69,14 @@ MANIFEST_ADMIN=false
 
 print_usage() {
   cat <<EOF
-Usage: $(basename "$0") <PROJECT> [--what-if|-w] [--verbose|-v]
+Usage: $(basename "$0") <PROJECT> [options]
+
+<PROJECT>             Valid Project Key from CONFIG_BASE/config/projects.json
+
+Options:
+  -h | --help         Show usage
+  -v | --verbose      Verbose logging
+  -w | --what-if      Log actions but do not execute
 
 Provision WordPress for a single project:
   - Downloads core (if missing)
@@ -106,8 +117,8 @@ parse_args() {
         exit 1
         ;;
       *)
-        if [[ -z "${PROJECT}" ]]; then
-          PROJECT="$1"
+        if [[ -z "${PROJECT_KEY}" ]]; then
+          PROJECT_KEY="$1"
           shift
         else
           echo "ERROR: Unexpected argument: $1" >&2
@@ -124,19 +135,34 @@ parse_args() {
 # -----------------------------------------------------------------------------
 
 bootstrap_config_and_logging() {
+  local CHECK_FILE
+
+  # Source Project Configuration
+  export PTEK_PROJECT_KEY="$PROJECT_KEY"
+
+  CHECK_FILE="${PTEK_APP_BASE}/lib/project_config.sh"
+  if [[ -f $CHECK_FILE ]]; then
+    source "$CHECK_FILE"
+  else
+    printf "ERROR: Project Config could not located at %s\n" "$CHECK_FILE"
+    exit 1
+  fi
+  CHECK_FILE=
+
+  # (Deprecated, sourcing auto-loads ptekprcfg and prjcfg())
   # Load project config once to get base_dir
-  project_config_load "${PROJECT}"
+  # project_config_load "${PROJECT_KEY}"
 
   # Resolve project root via canonical resolver
-  PROJECT_ROOT="$(project_resolve_repo)"
-  if [[ -z "${PROJECT_ROOT}" ]]; then
-    echo "ERROR: project_resolve_repo returned empty path for project '${PROJECT}'." >&2
+  PROJECT_REPO="$(prjcfg project_repo)"
+  if [[ -z "${PROJECT_REPO}" ]]; then
+    echo "ERROR: project_repo returned empty path for project '${PROJECT_KEY}'." >&2
     exit 2
   fi
 
   # Ensure logs directory
-  mkdir -p "${PROJECT_ROOT}/logs"
-  export LOGFILE="${PROJECT_ROOT}/logs/wordpress_deploy.log"
+  mkdir -p "${PROJECT_REPO}/logs"
+  export LOGFILE="${PROJECT_REPO}/logs/wordpress_deploy.log"
 
   # Bridge verbose flag
   if [[ "${VERBOSE}" == true ]]; then
@@ -144,7 +170,14 @@ bootstrap_config_and_logging() {
   fi
 
   # Load output.sh
-  source "${PTEK_APP_BASE}/lib/output.sh"
+  CHECK_FILE="${PTEK_APP_BASE}/lib/output.sh"
+  if [[ -f $CHECK_FILE ]]; then
+    source "$CHECK_FILE"
+  else
+    printf "ERROR: Logging utility could not be located at %s\n" "$CHECK_FILE"
+    exit 1
+  fi
+  CHECK_FILE=
 }
 
 # -----------------------------------------------------------------------------
@@ -152,33 +185,37 @@ bootstrap_config_and_logging() {
 # -----------------------------------------------------------------------------
 
 load_project_context() {
-  project_config_load "${PROJECT}"
 
-  WORDPRESS_DIR="${PROJECT_ROOT}/wordpress"
+  if [[ -z $(prjcfg project_key) ]]; then
+    error "Project config has not been sourced"
+    exit 1
+  fi
+
+  WORDPRESS_DIR="$(prjcfg 'project_repo')/wordpress"
   MANIFEST_FILE="${WORDPRESS_DIR}/.provisioned.json"
 
-  PROJECT_TITLE="$(prcfg_or_empty 'project.title')"
-  PROJECT_TITLE="${PROJECT_TITLE:-$PROJECT}"
+  PROJECT_TITLE="$(prjcfg 'project.title')"
+  PROJECT_TITLE="${PROJECT_TITLE:-$PROJECT_KEY}"
 
-  FRONTEND_NETWORK="$(prcfg_or_empty 'docker.frontend_network')"
-  BACKEND_NETWORK="$(prcfg_or_empty 'docker.backend_network')"
+  FRONTEND_NETWORK="$(prjcfg 'docker.frontend_network')"
+  BACKEND_NETWORK="$(prjcfg 'docker.backend_network')"
 
-  SQLDB_HOST="$(prcfg_or_empty 'database.host')"
-  SQLDB_NAME="$(prcfg_or_empty 'database.name')"
-  SQLDB_USER="$(prcfg_or_empty 'database.user')"
-  SQLDB_PASSWORD="$(prcfg_or_empty 'database.pass')"
+  SQLDB_HOST="$(prjcfg 'database.host')"
+  SQLDB_NAME="$(prjcfg 'database.name')"
+  SQLDB_USER="$(prjcfg 'database.user')"
+  SQLDB_PASSWORD="$(prjcfg 'database.pass')"
 
-  WORDPRESS_HOST="$(prcfg_or_empty 'wordpress.host')"
-  WORDPRESS_PORT="$(prcfg_or_empty 'wordpress.port')"
-  WORDPRESS_SSL_PORT="$(prcfg_or_empty 'wordpress.ssl_port')"
-  WORDPRESS_IMAGE="$(prcfg_or_empty 'wordpress.image')"
+  WORDPRESS_HOST="$(prjcfg 'wordpress.host')"
+  WORDPRESS_PORT="$(prjcfg 'wordpress.port')"
+  WORDPRESS_SSL_PORT="$(prjcfg 'wordpress.ssl_port')"
+  WORDPRESS_IMAGE="$(prjcfg 'wordpress.image')"
   WP_CLI_IMAGE="${WORDPRESS_IMAGE:-$WP_CLI_IMAGE_DEFAULT}"
 
-  WORDPRESS_ADMIN_USER="$(prcfg_or_empty 'wordpress.admin_user')"
-  WORDPRESS_ADMIN_EMAIL="$(prcfg_or_empty 'wordpress.admin_email')"
-  WORDPRESS_ADMIN_PASSWORD="$(prcfg_or_empty 'wordpress.admin_password')"
+  WORDPRESS_ADMIN_USER="$(prjcfg 'wordpress.admin_user')"
+  WORDPRESS_ADMIN_EMAIL="$(prjcfg 'wordpress.admin_email')"
+  WORDPRESS_ADMIN_PASSWORD="$(prjcfg 'wordpress.admin_password')"
 
-  WORDPRESS_TABLE_PREFIX="$(prcfg_or_empty 'wordpress.table_prefix')"
+  WORDPRESS_TABLE_PREFIX="$(prjcfg 'wordpress.table_prefix')"
   WORDPRESS_TABLE_PREFIX="${WORDPRESS_TABLE_PREFIX:-wp_}"
 
   # Validation
@@ -358,7 +395,7 @@ write_manifest() {
 
   cat > "${MANIFEST_FILE}" <<EOF
 {
-  "project": "${PROJECT}",
+  "project": "${PROJECT_KEY}",
   "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
   "core": ${MANIFEST_CORE},
   "config": ${MANIFEST_CONFIG},
@@ -380,14 +417,14 @@ main() {
   parse_args "$@"
   bootstrap_config_and_logging
 
-  log_header "WordPress deployment for '${PROJECT}'"
+  log_header "WordPress deployment for '${PROJECT_KEY}'"
   info "WHAT_IF=${WHAT_IF} VERBOSE=${VERBOSE}"
   info "APP_BASE=${PTEK_APP_BASE}"
 
   load_project_context
   compute_wordpress_url
 
-  info "Project root: ${PROJECT_ROOT}"
+  info "Project root: ${PROJECT_REPO}"
   info "WordPress directory: ${WORDPRESS_DIR}"
   info "WordPress URL: ${WORDPRESS_URL}"
   info "wp-cli image: ${WP_CLI_IMAGE}"
@@ -399,7 +436,7 @@ main() {
   ensure_admin_user
   write_manifest
 
-  success "WordPress deployment completed for '${PROJECT}'."
+  success "WordPress deployment completed for '${PROJECT_KEY}'."
 }
 
 main "$@"
