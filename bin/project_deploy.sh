@@ -118,7 +118,6 @@ info "Deploying project: $PROJECT_KEY"
 
 # New: tell project_config.sh which project to load
 export PTEK_PROJECT_KEY="$PROJECT_KEY"
-
 # shellcheck source=/dev/null
 source "${PTEK_APP_BASE}/lib/project_config.sh"
 

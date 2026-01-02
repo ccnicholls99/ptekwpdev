@@ -34,14 +34,15 @@ source "$APP_BASE/lib/output.sh"
 
 debug "project_config.sh initialized (APP_BASE=$APP_BASE)"
 
+# ---------------------------------------------------------------
+# Public dictionary
+# ---------------------------------------------------------------
+declare -gA ptekprcfg=()
+
 # -------------------------------------------------------------------
 # Private scope: all internal functions and variables hidden
 # -------------------------------------------------------------------
 (
-    # ---------------------------------------------------------------
-    # Private dictionary (not exported)
-    # ---------------------------------------------------------------
-    declare -gA ptekprcfg=()
 
     # ---------------------------------------------------------------
     # Private: load project configuration
