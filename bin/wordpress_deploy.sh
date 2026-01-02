@@ -137,6 +137,16 @@ parse_args() {
 bootstrap_config_and_logging() {
   local CHECK_FILE
 
+  # Load output.sh
+  CHECK_FILE="${PTEK_APP_BASE}/lib/output.sh"
+  if [[ -f $CHECK_FILE ]]; then
+    source "$CHECK_FILE"
+  else
+    printf "ERROR: Logging utility could not be located at %s\n" "$CHECK_FILE"
+    exit 1
+  fi
+  CHECK_FILE=
+
   # Source Project Configuration
   export PTEK_PROJECT_KEY="$PROJECT_KEY"
 
@@ -169,15 +179,6 @@ bootstrap_config_and_logging() {
     export PTEK_VERBOSE=1
   fi
 
-  # Load output.sh
-  CHECK_FILE="${PTEK_APP_BASE}/lib/output.sh"
-  if [[ -f $CHECK_FILE ]]; then
-    source "$CHECK_FILE"
-  else
-    printf "ERROR: Logging utility could not be located at %s\n" "$CHECK_FILE"
-    exit 1
-  fi
-  CHECK_FILE=
 }
 
 # -----------------------------------------------------------------------------
@@ -186,10 +187,14 @@ bootstrap_config_and_logging() {
 
 load_project_context() {
 
+  info "Loading Project Context..."
+  
   if [[ -z $(prjcfg project_key) ]]; then
     error "Project config has not been sourced"
     exit 1
   fi
+
+  info "Setting Project Variables..."
 
   WORDPRESS_DIR="$(prjcfg 'project_repo')/wordpress"
   MANIFEST_FILE="${WORDPRESS_DIR}/.provisioned.json"
@@ -218,6 +223,8 @@ load_project_context() {
   WORDPRESS_TABLE_PREFIX="$(prjcfg 'wordpress.table_prefix')"
   WORDPRESS_TABLE_PREFIX="${WORDPRESS_TABLE_PREFIX:-wp_}"
 
+  info "Validating Project Variables..."
+
   # Validation
   [[ -z "${SQLDB_HOST}" || -z "${SQLDB_NAME}" || -z "${SQLDB_USER}" ]] &&
     { error "Database config incomplete"; exit 2; }
@@ -230,6 +237,9 @@ load_project_context() {
 
   [[ -z "${WORDPRESS_ADMIN_USER}" || -z "${WORDPRESS_ADMIN_EMAIL}" || -z "${WORDPRESS_ADMIN_PASSWORD}" ]] &&
     { error "Admin credentials incomplete"; exit 2; }
+
+  success "Project Context loaded."
+
 }
 
 compute_wordpress_url() {
