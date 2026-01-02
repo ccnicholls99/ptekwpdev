@@ -32,7 +32,7 @@ source "$APP_BASE/lib/app_config.sh"
 # shellcheck source=/dev/null
 source "$APP_BASE/lib/output.sh"
 
-debug "project_config.sh initialized (APP_BASE=$APP_BASE)"
+info "project_config.sh initialized (APP_BASE=$APP_BASE)"
 
 # ---------------------------------------------------------------
 # Public dictionary
@@ -61,10 +61,10 @@ declare -gA ptekprcfg=()
             return 1
         fi
 
-        debug "Loading project '$key' from $file"
+        info "Loading project '$key' from $file"
 
         local json
-        json="$(jq -r --arg k "$key" '.[$k]' "$file")"
+        json="$(jq -r --arg k "$key" '.projects[$k]' "$file")"
 
         if [[ "$json" == "null" ]]; then
             error "Project '$key' not found in $file"
@@ -84,7 +84,7 @@ declare -gA ptekprcfg=()
         if [[ -n "${ptekprcfg[base_dir]:-}" ]]; then
             local before="${ptekprcfg[base_dir]}"
             ptekprcfg[base_dir]="${before##/}"
-            debug "Normalized base_dir: '$before' → '${ptekprcfg[base_dir]}'"
+            info "Normalized base_dir: '$before' → '${ptekprcfg[base_dir]}'"
         fi
 
         # Required fields
@@ -111,7 +111,10 @@ declare -gA ptekprcfg=()
         local repo="${clean_base}/${clean_dir}"
         ptekprcfg[project_repo]="$repo"
 
-        debug "Computed project_repo: '$raw_base' + '$raw_dir' → '$repo'"
+        # Inject project_key since it is not stored in JSON
+        ptekprcfg[project_key]="$key"
+
+        info "Computed project_repo: '$raw_base' + '$raw_dir' → '$repo'"
 
         success "Project '$key' configuration loaded"
     }
@@ -125,7 +128,7 @@ declare -gA ptekprcfg=()
             return 1
         fi
 
-        debug "Auto-loading project config for '$PTEK_PROJECT_KEY'"
+        info "Auto-loading project config for '$PTEK_PROJECT_KEY'"
         _project_config_load "$PTEK_PROJECT_KEY"
     fi
 )
