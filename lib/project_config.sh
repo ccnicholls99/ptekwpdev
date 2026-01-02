@@ -80,6 +80,9 @@ declare -gA ptekprcfg=()
             '
         )
 
+        # Inject project_key since it is not stored in JSON
+        ptekprcfg[project_key]="$key"
+
         # Normalize base_dir (strip ALL leading slashes)
         if [[ -n "${ptekprcfg[base_dir]:-}" ]]; then
             local before="${ptekprcfg[base_dir]}"
@@ -110,9 +113,6 @@ declare -gA ptekprcfg=()
 
         local repo="${clean_base}/${clean_dir}"
         ptekprcfg[project_repo]="$repo"
-
-        # Inject project_key since it is not stored in JSON
-        ptekprcfg[project_key]="$key"
 
         info "Computed project_repo: '$raw_base' + '$raw_dir' → '$repo'"
 
