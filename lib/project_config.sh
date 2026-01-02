@@ -39,11 +39,6 @@ info "project_config.sh initialized (APP_BASE=$APP_BASE)"
 # ---------------------------------------------------------------
 declare -gA ptekprcfg=()
 
-# -------------------------------------------------------------------
-# Private scope: all internal functions and variables hidden
-# -------------------------------------------------------------------
-(
-
     # ---------------------------------------------------------------
     # Private: load project configuration
     # ---------------------------------------------------------------
@@ -71,14 +66,13 @@ declare -gA ptekprcfg=()
             return 1
         fi
 
-        # Flatten JSON into dictionary
-        while IFS="=" read -r k v; do
-            ptekprcfg["$k"]="$v"
-        done < <(
-            echo "$json" | jq -r '
-                to_entries[] | "\(.key)=\(.value|tostring)"
-            '
-        )
+        # Flatten JSON into ptekprcfg
+        while IFS='=' read -r k v; do
+        ptekprcfg["$k"]="$v"
+        done < <(jq -r '
+        to_entries[]
+        | "\(.key)=\(.value|tostring)"
+        ' <<< "$json")
 
         # Inject project_key since it is not stored in JSON
         ptekprcfg[project_key]="$key"
@@ -131,7 +125,7 @@ declare -gA ptekprcfg=()
         info "Auto-loading project config for '$PTEK_PROJECT_KEY'"
         _project_config_load "$PTEK_PROJECT_KEY"
     fi
-)
+
 
 # -------------------------------------------------------------------
 # Public accessor (ONLY public function)
