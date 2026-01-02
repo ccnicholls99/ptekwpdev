@@ -1,135 +1,138 @@
 #!/usr/bin/env bash
-# ==============================================================================
-#  PTEKWPDEV — Project Configuration Loader
-#  Script: project_config.sh
-#  Location: APP_BASE/lib/project_config.sh
+# ===================================================================
+#  project_config.sh
+#  Load project-level configuration from projects.json into a private
+#  dictionary, exposing ONLY prjcfg() as a public accessor.
 #
-#  Description:
-#    Canonical loader for project-level configuration. Must be sourced, not
-#    executed. Loads CONFIG_BASE/config/projects.json and flattens all keys
-#    for the selected project into an in-memory associative array (PTEKPRCFG)
-#    using dot-notation.
-#
-#    This script provides a stable, contributor-safe interface for accessing
-#    project configuration derived from the app-level template:
-#      APP_BASE/app/config/projects.tpl.json
-#
-#  Contract:
-#    - Must be sourced
-#    - Never modifies caller's working directory
-#    - Never exports environment variables
-#    - Never leaks config outside the current shell
-#    - Fails loudly if bootstrap has not been run
-# ==============================================================================
+#  - Must be sourced, never executed
+#  - Auto-loads when sourced
+#  - Uses ONLY logging functions from APP_BASE/lib/output.sh
+#  - No exports, no global leakage, no side effects
+# ===================================================================
 
-# --------------------------------------------------------------------
-# Safety: prevent direct execution
-# --------------------------------------------------------------------
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-  echo "ERROR: project_config.sh must be sourced, not executed." >&2
-  exit 1
+set -euo pipefail
+
+# -------------------------------------------------------------------
+# Ensure this file is sourced, not executed
+# -------------------------------------------------------------------
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    echo "ERROR: project_config.sh must be sourced, not executed" >&2
+    exit 1
 fi
 
-# --------------------------------------------------------------------
-# Ensure app_config.sh is already loaded
-# --------------------------------------------------------------------
-if ! declare -p PTEKWPCFG >/dev/null 2>&1; then
-  echo "ERROR: app_config.sh must be sourced before project_config.sh" >&2
-  return 1
-fi
+# -------------------------------------------------------------------
+# Resolve APP_BASE and source global config + logging FIRST
+# -------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_BASE="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# --------------------------------------------------------------------
-# Globals
-# --------------------------------------------------------------------
-declare -gA PTEKPRCFG=()
+# shellcheck source=/dev/null
+source "$APP_BASE/lib/app_config.sh"
 
-# --------------------------------------------------------------------
-# Helper: prcfg <key>
-# --------------------------------------------------------------------
-prcfg() {
-  local key="$1"
-  if [[ -z "$key" ]]; then
-    echo "ERROR: prcfg requires a key" >&2
-    return 1
-  fi
-  echo "${PTEKPRCFG[$key]}"
-}
+# shellcheck source=/dev/null
+source "$APP_BASE/lib/output.sh"
 
-# --------------------------------------------------------------------
-# Load project config
-# Usage: project_config_load <project_key>
-# --------------------------------------------------------------------
-project_config_load() {
-  local project_key="$1"
+debug "project_config.sh initialized (APP_BASE=$APP_BASE)"
 
-  if [[ -z "$project_key" ]]; then
-    echo "ERROR: project_config_load requires a project key" >&2
-    return 1
-  fi
+# -------------------------------------------------------------------
+# Private scope: all internal functions and variables hidden
+# -------------------------------------------------------------------
+(
+    # ---------------------------------------------------------------
+    # Private dictionary (not exported)
+    # ---------------------------------------------------------------
+    declare -gA ptekprcfg=()
 
-  local projects_file
-  projects_file="$(appcfg config_base)/config/projects.json"
+    # ---------------------------------------------------------------
+    # Private: load project configuration
+    # ---------------------------------------------------------------
+    _project_config_load() {
+        local key="$1"
+        local file="${PTEKWPCFG[projects_file]}"
 
-  if [[ ! -f "$projects_file" ]]; then
-    echo "ERROR: projects.json not found at: $projects_file" >&2
-    return 1
-  fi
+        if [[ -z "$key" ]]; then
+            error "project_config_load: no project key provided"
+            return 1
+        fi
 
-  # Extract project block
-  local project_json
-  project_json="$(jq -r --arg key "$project_key" '.projects[$key]' "$projects_file")"
+        if [[ ! -f "$file" ]]; then
+            error "projects.json not found: $file"
+            return 1
+        fi
 
-  if [[ "$project_json" == "null" ]]; then
-    echo "ERROR: Project '$project_key' not found in projects.json" >&2
-    return 1
-  fi
+        debug "Loading project '$key' from $file"
 
-  # --------------------------------------------------------------------
-  # Validate required top-level keys
-  # --------------------------------------------------------------------
-  local required_keys=(
-    "project_domain"
-    "project_network"
-    "base_dir"
-    "wordpress"
-    "secrets"
-    "dev_sources"
-  )
+        local json
+        json="$(jq -r --arg k "$key" '.[$k]' "$file")"
 
-  for key in "${required_keys[@]}"; do
-    if ! jq -e --arg k "$key" '.[$k] != null' <<<"$project_json" >/dev/null; then
-      echo "ERROR: Missing required key '$key' in project '$project_key'" >&2
-      return 1
+        if [[ "$json" == "null" ]]; then
+            error "Project '$key' not found in $file"
+            return 1
+        fi
+
+        # Flatten JSON into dictionary
+        while IFS="=" read -r k v; do
+            ptekprcfg["$k"]="$v"
+        done < <(
+            echo "$json" | jq -r '
+                to_entries[] | "\(.key)=\(.value|tostring)"
+            '
+        )
+
+        # Normalize base_dir (strip ALL leading slashes)
+        if [[ -n "${ptekprcfg[base_dir]:-}" ]]; then
+            local before="${ptekprcfg[base_dir]}"
+            ptekprcfg[base_dir]="${before##/}"
+            debug "Normalized base_dir: '$before' → '${ptekprcfg[base_dir]}'"
+        fi
+
+        # Required fields
+        local required=(project_title project_description base_dir)
+        for r in "${required[@]}"; do
+            if [[ -z "${ptekprcfg[$r]:-}" ]]; then
+                error "Missing required project field: $r"
+                return 1
+            fi
+        done
+
+        # -----------------------------------------------------------
+        # Compute project_repo with full normalization
+        # -----------------------------------------------------------
+        local raw_base="${PTEKWPCFG[project_base]}"
+        local raw_dir="${ptekprcfg[base_dir]}"
+
+        # Strip trailing slashes from project_base
+        local clean_base="${raw_base%/}"
+
+        # Strip leading slashes from base_dir
+        local clean_dir="${raw_dir##/}"
+
+        local repo="${clean_base}/${clean_dir}"
+        ptekprcfg[project_repo]="$repo"
+
+        debug "Computed project_repo: '$raw_base' + '$raw_dir' → '$repo'"
+
+        success "Project '$key' configuration loaded"
+    }
+
+    # ---------------------------------------------------------------
+    # Auto-load when sourced
+    # ---------------------------------------------------------------
+    if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+        if [[ -z "${PTEK_PROJECT_KEY:-}" ]]; then
+            error "project_config.sh sourced but PTEK_PROJECT_KEY is not set"
+            return 1
+        fi
+
+        debug "Auto-loading project config for '$PTEK_PROJECT_KEY'"
+        _project_config_load "$PTEK_PROJECT_KEY"
     fi
-  done
+)
 
-  # --------------------------------------------------------------------
-  # Flatten project JSON into PTEKPRCFG
-  # --------------------------------------------------------------------
-  while IFS="=" read -r k v; do
-    PTEKPRCFG["$k"]="$v"
-  done < <(
-    jq -r '
-      to_entries
-      | .[]
-      | if (.value | type) == "object" then
-          .value
-          | to_entries
-          | .[]
-          | "\(.key)=\(.value)"
-        else
-          "\(.key)=\(.value)"
-        end
-    ' <<<"$project_json"
-  )
-
-  # --------------------------------------------------------------------
-  # Add derived values
-  # --------------------------------------------------------------------
-  PTEKPRCFG["project_key"]="$project_key"
-  PTEKPRCFG["project_repo"]="$(appcfg project_base)/${PTEKPRCFG[base_dir]}"
-
-  return 0
+# -------------------------------------------------------------------
+# Public accessor (ONLY public function)
+# -------------------------------------------------------------------
+prjcfg() {
+    local key="$1"
+    [[ -n "${ptekprcfg[$key]+x}" ]] && printf '%s' "${ptekprcfg[$key]}"
 }
-
-# End of file
