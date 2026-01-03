@@ -126,6 +126,44 @@ This ensures contributors never hand‑edit generated logic and can always
 regenerate scripts safely.
 
 ---
+## 📌 Flow Diagram
+
+                          +-----------------------------+
+                          |     app/support/templates   |
+                          |-----------------------------|
+                          |  template.error.sh          |
+                          |  template.output.sh         |
+                          |  template.helpers.sh        |
+                          |  template.app_config.sh     |
+                          |  template.prj_config.sh     |
+                          +--------------+--------------+
+                                         |
+                                         |  (selected via flags)
+                                         v
+                          +-----------------------------+
+                          |   app/support/bin           |
+                          |   Script Generators         |
+                          |-----------------------------|
+                          |  script_new.sh              |
+                          |  script_header_apply.sh     |
+                          |  script_header_fix.sh       |
+                          |  script_header_check.sh     |
+                          +--------------+--------------+
+                                         |
+                                         |  (inject templates into
+                                         |   DO-NOT-EDIT blocks)
+                                         v
+                     +------------------------------------------------+
+                     |        Generated Contributor Scripts           |
+                     |------------------------------------------------|
+                     |  ./bin/*.sh                                    |
+                     |  ./app/support/bin/*.sh (generated variants)   |
+                     |                                                |
+                     |  - contain mutation-aware include blocks       |
+                     |  - include deterministic template content      |
+                     |  - safe to regenerate, not safe to hand-edit   |
+                     +------------------------------------------------+
+---
 
 ## 📌 Notes for Contributors
 
