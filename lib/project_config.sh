@@ -26,11 +26,17 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_BASE="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# shellcheck source=/dev/null
-source "$APP_BASE/lib/app_config.sh"
+# Prevent double-sourcing
+[[ -n "${PTEK_LIB_PROJECT_CONFIG_LOADED:-}" ]] && return
+PTEK_LIB_PROJECT_CONFIG_LOADED=1
 
-# shellcheck source=/dev/null
-source "$APP_BASE/lib/output.sh"
+# ------------------------------------------------------------------------------
+# Dependencies
+# ------------------------------------------------------------------------------
+if [[ -z "${PTEK_LIB_APP_CONFIG_LOADED:-}" ]]; then
+    # shellcheck source=/dev/null
+    source "${PTEK_APP_BASE}/lib/app_config.sh"
+fi
 
 info "project_config.sh initialized (APP_BASE=$APP_BASE)"
 

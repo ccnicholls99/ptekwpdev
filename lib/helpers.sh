@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 # Common helper functions for PtekWPDev
 
+# Prevent double-sourcing
+[[ -n "${PTEK_LIB_HELPERS_LOADED:-}" ]] && return
+PTEK_LIB_HELPERS_LOADED=1
+
+# ------------------------------------------------------------------------------
+# Optional Dependencies
+# ------------------------------------------------------------------------------
+# Only load logging if helper functions require it
+if [[ -z "${PTEK_LIB_OUTPUT_LOADED:-}" ]]; then
+    # shellcheck source=/dev/null
+    source "${PTEK_APP_BASE}/lib/output.sh"
+fi
+
 # === Usage documentation ===
 helpers_usage() {
   cat <<'EOF'

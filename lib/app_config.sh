@@ -43,6 +43,18 @@ trap ptekwp_cleanup EXIT
 PTEK_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PTEK_APP_BASE="$(cd "${PTEK_LIB_DIR}/.." && pwd)"
 
+# Prevent double-sourcing
+[[ -n "${PTEK_LIB_APP_CONFIG_LOADED:-}" ]] && return
+PTEK_LIB_APP_CONFIG_LOADED=1
+
+# ------------------------------------------------------------------------------
+# Dependencies
+# ------------------------------------------------------------------------------
+if [[ -z "${PTEK_LIB_OUTPUT_LOADED:-}" ]]; then
+    # shellcheck source=/dev/null
+    source "${PTEK_APP_BASE}/lib/output.sh"
+fi
+
 # ------------------------------------------------------------------------------
 # Resolve CONFIG_BASE and app.json location
 # ------------------------------------------------------------------------------

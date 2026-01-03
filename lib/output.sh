@@ -11,6 +11,11 @@
 # - This file will NOT create directories.
 # --------------------------------------------------------------------
 
+# Prevent double-sourcing
+[[ -n "${PTEK_LIB_OUTPUT_LOADED:-}" ]] && return
+PTEK_LIB_OUTPUT_LOADED=1
+
+
 # Collision-proof logfile variable
 : "${PTEK_LOGFILE:=/dev/null}"
 
