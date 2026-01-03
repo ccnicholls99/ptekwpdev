@@ -10,6 +10,7 @@
 #  Notes:
 #    - This file is intentionally simple and text‑based.
 #    - Tasks should be explicit, actionable, and contributor‑safe.
+#    - [ ] TODO, [?] Investigate, [X] Done
 # ==============================================================================
 
 [ ] Add Makefile targets for dev_sources
@@ -39,7 +40,7 @@
       - Ensure demo remains metadata-only until contributor runs lifecycle
       - demo project.json values in app_base/docs/cp_demo_projects.json
 
-[ ] Update app_deploy to generate projects.json with empty "projects" node
+[X] Update app_deploy to generate projects.json with empty "projects" node
       - Remove demo project initialization
       - Ensure no auto-insertion of demo metadata
       - Confirm project_create is now required for demo lifecycle
@@ -48,7 +49,7 @@
       - projects.json must contain only { "projects": {} }
       - demo project must be created manually via project_create
 
-[ ] Improve app_deploy projects.json preservation logic
+[?] Improve app_deploy projects.json preservation logic
       - Current rule: do not overwrite if projects.json exists
       - Future rule: validate JSON structure before deciding to preserve
       - Regenerate only if:
@@ -107,5 +108,20 @@
       - If it exists, copy it to CONFIG_BASE/config/archive/<filename>.<timestamp>.json
       - Log the backup action in the app_deploy log.
       - Proceed with overwrite only after successful backup.
+
+[ ] output.sh:
+      Add shorthand options for --truncate
+    - Introduce -t as the canonical truncate flag
+    - Ensure long form (--truncate) remains supported for clarity
+
+      Add HEADER as an option instead of positional argument
+    - Replace positional header argument with --doc-head / -d
+    - Update usage text and internal parsing accordingly
+    - Maintain backward compatibility only if necessary
+
+      Make --append the default action
+    - Remove --append flag entirely
+    - Default behavior becomes append mode
+    - Truncate only when -t / --truncate is explicitly provided
 
 # Add new tasks below this line

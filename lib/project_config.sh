@@ -37,7 +37,7 @@ info "project_config.sh initialized (APP_BASE=$APP_BASE)"
 # ---------------------------------------------------------------
 # Public dictionary
 # ---------------------------------------------------------------
-declare -gA ptekprcfg=()
+declare -gA PTEKPRCFG=()
 
     # ---------------------------------------------------------------
     # Private: load project configuration
@@ -66,28 +66,28 @@ declare -gA ptekprcfg=()
             return 1
         fi
 
-        # Flatten JSON into ptekprcfg
+        # Flatten JSON into PTEKPRCFG
         while IFS='=' read -r k v; do
-        ptekprcfg["$k"]="$v"
+        PTEKPRCFG["$k"]="$v"
         done < <(jq -r '
         to_entries[]
         | "\(.key)=\(.value|tostring)"
         ' <<< "$json")
 
         # Inject project_key since it is not stored in JSON
-        ptekprcfg[project_key]="$key"
+        PTEKPRCFG[project_key]="$key"
 
         # Normalize base_dir (strip ALL leading slashes)
-        if [[ -n "${ptekprcfg[base_dir]:-}" ]]; then
-            local before="${ptekprcfg[base_dir]}"
-            ptekprcfg[base_dir]="${before##/}"
-            info "Normalized base_dir: '$before' → '${ptekprcfg[base_dir]}'"
+        if [[ -n "${PTEKPRCFG[base_dir]:-}" ]]; then
+            local before="${PTEKPRCFG[base_dir]}"
+            PTEKPRCFG[base_dir]="${before##/}"
+            info "Normalized base_dir: '$before' → '${PTEKPRCFG[base_dir]}'"
         fi
 
         # Required fields
         local required=(project_title project_description base_dir)
         for r in "${required[@]}"; do
-            if [[ -z "${ptekprcfg[$r]:-}" ]]; then
+            if [[ -z "${PTEKPRCFG[$r]:-}" ]]; then
                 error "Missing required project field: $r"
                 return 1
             fi
@@ -97,7 +97,7 @@ declare -gA ptekprcfg=()
         # Compute project_repo with full normalization
         # -----------------------------------------------------------
         local raw_base="${PTEKWPCFG[project_base]}"
-        local raw_dir="${ptekprcfg[base_dir]}"
+        local raw_dir="${PTEKPRCFG[base_dir]}"
 
         # Strip trailing slashes from project_base
         local clean_base="${raw_base%/}"
@@ -106,7 +106,7 @@ declare -gA ptekprcfg=()
         local clean_dir="${raw_dir##/}"
 
         local repo="${clean_base}/${clean_dir}"
-        ptekprcfg[project_repo]="$repo"
+        PTEKPRCFG[project_repo]="$repo"
 
         info "Computed project_repo: '$raw_base' + '$raw_dir' → '$repo'"
 
@@ -132,5 +132,5 @@ declare -gA ptekprcfg=()
 # -------------------------------------------------------------------
 prjcfg() {
     local key="$1"
-    [[ -n "${ptekprcfg[$key]+x}" ]] && printf '%s' "${ptekprcfg[$key]}"
+    [[ -n "${PTEKPRCFG[$key]+x}" ]] && printf '%s' "${PTEKPRCFG[$key]}"
 }
