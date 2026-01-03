@@ -42,6 +42,7 @@ USE_LOGGING=0
 USE_UTILS=0
 USE_APP_CONFIG=0
 USE_PROJECT_CONFIG=0
+USE_FORCE=0
 USE_WHATIF=0
 
 usage() {
@@ -137,11 +138,11 @@ else
 
         echo "# --- Optional Includes --------------------------------------------------"
 
-        [[ $USE_ERR -eq 1 ]]        && cat "${TEMPLATE_DIR}/template.error.sh"
-        [[ $USE_LOGGING -eq 1 ]]    && cat "${TEMPLATE_DIR}/template.output.sh"
-        [[ $USE_HELPERS -eq 1 ]]    && cat "${TEMPLATE_DIR}/template.helpers.sh"
-        [[ $USE_APP_CONFIG -eq 1 ]] && cat "${TEMPLATE_DIR}/template.app_config.sh"
-        [[ $USE_PRJ_CONFIG -eq 1 ]] && cat "${TEMPLATE_DIR}/template.prj_config.sh"
+        [[ $USE_ERR -eq 1 ]]            && cat "${TEMPLATE_DIR}/template.error.sh"
+        [[ $USE_LOGGING -eq 1 ]]        && cat "${TEMPLATE_DIR}/template.output.sh"
+        [[ $USE_UTILS -eq 1 ]]          && cat "${TEMPLATE_DIR}/template.helpers.sh"
+        [[ $USE_APP_CONFIG -eq 1 ]]     && cat "${TEMPLATE_DIR}/template.app_config.sh"
+        [[ $USE_PROJECT_CONFIG -eq 1 ]] && cat "${TEMPLATE_DIR}/template.prj_config.sh"
 
         echo "# ------------------------------------------------------------------------"
         echo ""
