@@ -11,7 +11,7 @@ toolchain.
 
 All templates in this directory follow the mutation‑aware wrapper pattern:
 
-```
+```bash
 # ====Name>>================================================
 # Generated Code, modify with caution
 ...
