@@ -1,4 +1,3 @@
-#!/usr/bin/bash
 # ====Error Handling>>=====================================
 # Source Error Handling
 # Generated Code, modify with caution

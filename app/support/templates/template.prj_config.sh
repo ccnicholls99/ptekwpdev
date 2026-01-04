@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # ====Project Config>>=====================================
 # Source Project Configuration Library
 # Defines PTEKPRCFG[] dictionary and prjcfg() accessor

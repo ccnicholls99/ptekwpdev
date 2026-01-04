@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # ====Log Handling>>=======================================
 # Source Log Handling
 # Set PTEK_LOGFILE before sourcing to set logfile (default=/dev/null)

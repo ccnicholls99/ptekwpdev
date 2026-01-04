@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+
+# Do not use...still experimental
+echo "script_header_apply is non functional - do not use"
+exit 0
+
 set -Eeuo pipefail
 
 # --- Error Handling ---------------------------------------------------------

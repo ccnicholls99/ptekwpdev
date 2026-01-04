@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Do not use...still experimental
+echo "script_header_fix is non functional - do not use"
+exit 0
+
 # ================================================================================
 # PTEKWPDEV — a multi-project, bootstrap app for localized WordPress development
 # github: https://github.com/ccnicholls99/ptekwpdev.git

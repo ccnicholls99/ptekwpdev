@@ -1,169 +1,145 @@
 #!/usr/bin/env bash
 # ================================================================================
-# PTEKWPDEV — a multi-project, bootstrap app for localized WordPress development
-# github: https://github.com/ccnicholls99/ptekwpdev.git
-# ------------------------------------------------------------------------------
-# Script: script_header_check.sh
+# PTEKWPDEV — Header & Template Block Check Utility
+# -------------------------------------------------------------------------------
+# Checks whether a script contains the canonical header wrapper AND all expected
+# mutation-aware template include blocks.
 #
-# Description:
-#   Examine all scripts in APP_BASE/bin for comment headers.
+# This tool does NOT modify files.
 #
-# Notes:
-#   - Header Template can be found in APP_BASE/doc/script_header.tpl
-#
+# For template and header details, see:
+#   app/support/README.md
 # ================================================================================
-#!/usr/bin/env bash
+
 set -Eeuo pipefail
 
 # --- Error Handling ---------------------------------------------------------
 COLOR_RED="\033[31m"
+COLOR_GREEN="\033[32m"
 COLOR_RESET="\033[0m"
 _ts() { date +"%Y-%m-%d %H:%M:%S"; }
 err() { echo -e "${COLOR_RED}[$(_ts)] ERROR: $*${COLOR_RESET}" >&2; }
+ok()  { echo -e "${COLOR_GREEN}[$(_ts)] OK: $*${COLOR_RESET}"; }
 
 CALLER_PWD="$(pwd)"
 trap 'err "Command failed (exit $?): $BASH_COMMAND"' ERR
 trap 'cd "$CALLER_PWD" || true' EXIT
 # ---------------------------------------------------------------------------
 
-# Resolve APP_BASE from app/support/bin
-APP_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-SUPPORT_BASE="${APP_BASE}/app/support"
-TEMPLATE_DIR="${SUPPORT_BASE}/templates"
-HEADER_TEMPLATE="${TEMPLATE_DIR}/script_header.tpl"
+# --- Flags -----------------------------------------------------------------
+USE_VERBOSE=0
+USE_WHATIF=0
 
 usage() {
     cat <<EOF
-Usage: script_header_check.sh [options] <file1> [file2 ...]
+Usage: script_header_check.sh [options] <script-path>
 
-Include verification flags:
-  -e?   Verify error.sh include
-  -l?   Verify output.sh include (requires LOGFILE guard)
-  -u?   Verify helpers.sh include
-  -a?   Verify app_config.sh include
-  -p?   Verify project_config.sh include (requires PROJECT_KEY guard)
+Options:
+  -v, --verbose         Print success messages as well as failures
+  -w, --what-if         Dry-run mode (no effect, but prints actions)
+  -h, --help            Show this help message
 
-This script performs:
-  - Header hash verification
-  - Include block wrapper verification
-  - Canonical include ordering checks
-  - Guard checks for LOGFILE and PROJECT_KEY
-  - Verification that lib scripts are sourced, not executed
+Example:
+  script_header_check.sh ./bin/wordpress_cleanup.sh
 EOF
-    exit 1
 }
+# ---------------------------------------------------------------------------
 
-# --- Parse include verification flags ---------------------------------------
-declare -A VERIFY=()
-declare -A INCLUDE_LINES=(
-    [e]='source "${APP_BASE}/lib/error.sh"'
-    [l]='source "${APP_BASE}/lib/output.sh"'
-    [u]='source "${APP_BASE}/lib/helpers.sh"'
-    [a]='source "${APP_BASE}/lib/app_config.sh"'
-    [p]='source "${APP_BASE}/lib/project_config.sh"'
-)
-INCLUDE_ORDER=(e l u a p)
-
-FILES=()
-
-FILES=()
-
+# --- Parse Args ------------------------------------------------------------
+ARGS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        -v|--verbose) USE_VERBOSE=1 ;;
+        -w|--what-if) USE_WHATIF=1 ;;
         -h|--help)
             usage
+            exit 0
             ;;
-
-        -[eluap]\?)
-            key="${1:1:1}"
-            VERIFY["$key"]=1
-            ;;
-
         -*)
             err "Unknown option: $1"
             usage
+            exit 1
             ;;
-
         *)
-            FILES+=("$1")
+            ARGS+=("$1")
             ;;
     esac
     shift
 done
 
-[[ ${#FILES[@]} -gt 0 ]] || usage
+[[ ${#ARGS[@]} -eq 1 ]] || { err "Missing script path"; usage; exit 1; }
+TARGET="${ARGS[0]}"
+# ---------------------------------------------------------------------------
 
-# --- Compute canonical header hash ------------------------------------------
-CANON_HASH="$(sha256sum "$HEADER_TEMPLATE" | awk '{print $1}')"
+# --- WHAT-IF Preview -------------------------------------------------------
+if [[ $USE_WHATIF -eq 1 ]]; then
+    echo "[WHAT-IF] Would check header and template blocks for: $TARGET"
+fi
+# ---------------------------------------------------------------------------
 
-status=0
+# --- Validate Target -------------------------------------------------------
+if [[ ! -f "$TARGET" ]]; then
+    err "File not found: $TARGET"
+    exit 1
+fi
+# ---------------------------------------------------------------------------
 
-# --- Check each file --------------------------------------------------------
-for file in "${FILES[@]}"; do
-    if [[ ! -f "$file" ]]; then
-        err "Not a file: $file"
-        status=1
-        continue
+# --- Header Wrapper Check --------------------------------------------------
+HEADER_OPEN_REGEX='^# ====.+>>=+'
+HEADER_CLOSE_REGEX='^# ====<<.+=+'
+
+HAS_OPEN=0
+HAS_CLOSE=0
+
+HAS_OPEN=0
+HAS_CLOSE=0
+
+while IFS= read -r line; do
+    [[ $line =~ $HEADER_OPEN_REGEX ]] && HAS_OPEN=1
+    [[ $line =~ $HEADER_CLOSE_REGEX ]] && HAS_CLOSE=1
+done < <(head -n 20 "$TARGET")
+
+if [[ $HAS_OPEN -eq 0 || $HAS_CLOSE -eq 0 ]]; then
+    err "Missing or invalid script header wrapper"
+    exit 2
+else
+    [[ $USE_VERBOSE -eq 1 ]] && ok "Header wrapper OK"
+fi
+# ---------------------------------------------------------------------------
+
+# --- Template Block Checks -------------------------------------------------
+declare -A TEMPLATE_BLOCKS=(
+    ["Error Handling"]="Error Handling"
+    ["Log Handling"]="Log Handling"
+    ["Helpers"]="Helpers"
+    ["App Config"]="App Config"
+    ["Project Config"]="Project Config"
+)
+
+MISSING=0
+
+for KEY in "${!TEMPLATE_BLOCKS[@]}"; do
+    NAME="${TEMPLATE_BLOCKS[$KEY]}"
+
+    OPEN_PATTERN="# ====${NAME}>>"
+    CLOSE_PATTERN="# ====<<${NAME}"
+
+    HAS_OPEN=$(grep -c "$OPEN_PATTERN" "$TARGET" || true)
+    HAS_CLOSE=$(grep -c "$CLOSE_PATTERN" "$TARGET" || true)
+
+    if [[ $HAS_OPEN -gt 0 && $HAS_CLOSE -gt 0 ]]; then
+        [[ $USE_VERBOSE -eq 1 ]] && ok "Template OK: $NAME"
+    else
+        err "Missing template block: $NAME"
+        MISSING=1
     fi
-
-    echo "Checking: $file"
-
-    # --- 1. Header verification ---------------------------------------------
-    EXISTING_HASH="$(head -n 50 "$file" | sha256sum | awk '{print $1}')"
-    if [[ "$EXISTING_HASH" != "$CANON_HASH" ]]; then
-        err "Header mismatch: $file"
-        status=1
-    fi
-
-    # --- 2. Extract include block -------------------------------------------
-    include_block="$(sed -n '/^# --- Generated Includes/,/^# ---------------------------------------------------------------------------/p' "$file")"
-
-    if [[ -z "$include_block" ]]; then
-        err "Missing generated include block wrapper in $file"
-        status=1
-        continue
-    fi
-
-    # --- 3. Verify include ordering + presence -------------------------------
-    for key in "${INCLUDE_ORDER[@]}"; do
-        line="${INCLUDE_LINES[$key]}"
-
-        if [[ -n "${VERIFY[$key]:-}" ]]; then
-            if ! grep -Fq "$line" <<< "$include_block"; then
-                err "Missing include ($key?): $line"
-                status=1
-            fi
-        fi
-    done
-
-    # --- 4. Guard checks -----------------------------------------------------
-    if grep -Fq 'source "${APP_BASE}/lib/output.sh"' <<< "$include_block"; then
-        if ! grep -Fq 'LOGFILE' <<< "$include_block"; then
-            err "Missing LOGFILE guard before output.sh in $file"
-            status=1
-        fi
-    fi
-
-    if grep -Fq 'source "${APP_BASE}/lib/project_config.sh"' <<< "$include_block"; then
-        if ! grep -Fq 'PROJECT_KEY' <<< "$include_block"; then
-            err "Missing PROJECT_KEY guard before project_config.sh in $file"
-            status=1
-        fi
-    fi
-
-    # --- 5. Verify lib scripts enforce sourced-only guard --------------------
-    for key in "${INCLUDE_ORDER[@]}"; do
-        line="${INCLUDE_LINES[$key]}"
-        if grep -Fq "$line" <<< "$include_block"; then
-            lib_path="$(sed 's/source "\(.*\)"/\1/' <<< "$line")"
-            if ! grep -Fq 'BASH_SOURCE' "$lib_path"; then
-                err "Lib script missing sourced-only guard: $lib_path"
-                status=1
-            fi
-        fi
-    done
-
-    echo "OK: $file"
 done
 
-exit "$status"
+# ---------------------------------------------------------------------------
+
+if [[ $MISSING -eq 1 ]]; then
+    exit 3
+else
+    [[ $USE_VERBOSE -eq 1 ]] && ok "All template blocks present"
+    exit 0
+fi

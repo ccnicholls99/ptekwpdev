@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # ====App Config>>=========================================
 # Source App Configuration Library
 # Defines PTEKWPCFG settngs dictionary. Adds appcfg 'key' accessor function

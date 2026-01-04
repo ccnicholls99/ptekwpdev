@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # ====Helpers>>============================================
 # Source Helper Functions
 # Generated Code, modify with caution

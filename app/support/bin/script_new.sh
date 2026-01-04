@@ -41,7 +41,7 @@ USE_ERR=0
 USE_LOGGING=0
 USE_UTILS=0
 USE_APP_CONFIG=0
-USE_PROJECT_CONFIG=0
+USE_PRJ_CONFIG=0
 USE_FORCE=0
 USE_WHATIF=0
 
@@ -50,20 +50,18 @@ usage() {
 Usage: script_new.sh [options] <target-path>
 
 Options:
-  -e, --err             Include: source "\${APP_BASE}/lib/error.sh"
-  -l, --logging         Include: source "\${APP_BASE}/lib/output.sh"
-  -u, --utils           Include: source "\${APP_BASE}/lib/helpers.sh"
-  -a, --app-config      Include: source "\${APP_BASE}/lib/app_config.sh"
-  -p, --project-config  Include: source "\${APP_BASE}/lib/project_config.sh"
+  -e, --err             Include error handling block
+  -l, --logging         Include logging block
+  -u, --helpers         Include helpers block
+  -a, --app-config      Include app config block
+  -p, --prj-config      Include project config block
   -f, --force           Overwrite existing script
-  -w, --what-f          Dry-run mode (preview actions, no writes)
+  -w, --what-if         Dry-run mode (preview actions, no writes)
   -h, --help            Show this help message
 
 Example:
   script_new.sh -e -l -u ./bin/my_script.sh
-  script_new.sh -e -l -u -w ./bin/my_script.sh
 EOF
-    exit 0
 }
 
 # --- Parse args -------------------------------------------------------------
@@ -74,12 +72,13 @@ while [[ $# -gt 0 ]]; do
         -l|--logging)         USE_LOGGING=1 ;;
         -u|--utils)           USE_UTILS=1 ;;
         -a|--app-config)      USE_APP_CONFIG=1 ;;
-        -p|--project-config)  USE_PROJECT_CONFIG=1 ;;
+        -p|--project-config)  USE_PRJ_CONFIG=1 ;;
         -f|--force)           USE_FORCE=1 ;;
         -w|--what-if)         USE_WHATIF=1 ;;
-        -h|--help)            usage ;;
+        -h|--help)            usage; exit 0 ;;
         -*)
             err "Unknown option: $1"
+            usage
             exit 1
             ;;
         *)
@@ -101,7 +100,11 @@ fi
 
 if [[ -e "$TARGET" ]]; then
     if [[ $USE_WHATIF -eq 1 ]]; then
-        echo "[WHAT-IF] Target exists and would be overwritten: $TARGET"
+        if [[ $USE_FORCE -eq 1 ]]; then
+            echo "[WHAT-IF] Target exists and would be overwritten (because --force was provided): $TARGET"
+        else
+            echo "[WHAT-IF] Target exists and would NOT be overwritten (missing --force): $TARGET"
+        fi
     else
         if [[ $USE_FORCE -eq 1 ]]; then
             echo "Overwriting existing script: $TARGET"
@@ -110,10 +113,6 @@ if [[ -e "$TARGET" ]]; then
             err "File already exists: $TARGET (use --force or --what-if)"
             exit 1
         fi
-    fi
-else
-    if [[ $USE_WHATIF -eq 1 ]]; then
-        echo "[WHAT-IF] Target does not exist and would be created: $TARGET"
     fi
 fi
 
@@ -136,13 +135,20 @@ else
         echo "# ========================================================================"
         echo ""
 
-        echo "# --- Optional Includes --------------------------------------------------"
+# --- Optional Includes --------------------------------------------------
 
-        [[ $USE_ERR -eq 1 ]]            && cat "${TEMPLATE_DIR}/template.error.sh"
-        [[ $USE_LOGGING -eq 1 ]]        && cat "${TEMPLATE_DIR}/template.output.sh"
-        [[ $USE_UTILS -eq 1 ]]          && cat "${TEMPLATE_DIR}/template.helpers.sh"
-        [[ $USE_APP_CONFIG -eq 1 ]]     && cat "${TEMPLATE_DIR}/template.app_config.sh"
-        [[ $USE_PROJECT_CONFIG -eq 1 ]] && cat "${TEMPLATE_DIR}/template.prj_config.sh"
+        add_block() {
+            local file="$1"
+            echo ""              # ensure separation
+            cat "$file"
+            echo ""              # ensure trailing newline
+        }
+
+        [[ $USE_ERR -eq 1 ]]        && add_block "${TEMPLATE_DIR}/template.error.sh"
+        [[ $USE_LOGGING -eq 1 ]]    && add_block "${TEMPLATE_DIR}/template.output.sh"
+        [[ $USE_UTILS -eq 1 ]]      && add_block "${TEMPLATE_DIR}/template.helpers.sh"
+        [[ $USE_APP_CONFIG -eq 1 ]] && add_block "${TEMPLATE_DIR}/template.app_config.sh"
+        [[ $USE_PRJ_CONFIG -eq 1 ]] && add_block "${TEMPLATE_DIR}/template.prj_config.sh"
 
         echo "# ------------------------------------------------------------------------"
         echo ""
