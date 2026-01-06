@@ -1,0 +1,35 @@
+{
+  "app_key": "",
+  "app_base": "",
+  "config_base": "",
+  "project_base": "",
+
+  "backend_network": "",
+
+  "secrets": {
+    "sqldb_root": "",
+    "sqldb_root_pass": ""
+  },
+
+  "database": {
+    "sqldb_port": "",
+    "sqldb_image": "",
+    "sqldb_version": "",
+
+    "sqladmin_image": "",
+    "sqladmin_version": "",
+    "sqladmin_port": ""
+  },
+
+  "assets": {
+    "container": "",
+    "root_path": ""
+  },
+
+  "wordpress_defaults": {
+    "image": "",
+    "php_version": "",
+    "port": -1,
+    "ssl_port": ""
+  }
+}

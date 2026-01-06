@@ -16,6 +16,7 @@ app/assets/static/*/*.zip
 app/logs/*
 logs/*
 
-# Generated config files
+# Generated config & support files
+app/config/*.bak
 app/config/app.json
 app/config/projects.json
