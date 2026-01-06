@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# ==============================================================================
+# ====App Deploy>>=============================================================
 #  PTEKWPDEV — App Deployment Script
-#  Script: app_deploy.sh
+#  Script: bin/app_deploy.sh
 #  Synopsis:
 #    Deploy the app-level runtime environment by generating projects.json
 #    from the existing template, copying runtime config templates into
@@ -22,30 +22,42 @@
 #    - projects.json is generated from projects.tpl.json
 #    - app_deploy does NOT insert any project metadata
 #    - project_create is responsible for adding projects to projects.json
-# ==============================================================================
+# ====<<App Deploy=============================================================
 
 set -o errexit
 set -o nounset
 set -o pipefail
 
-# ------------------------------------------------------------------------------
-# Preserve caller directory
-# ------------------------------------------------------------------------------
+# ====Error Handling>>=====================================
+# Source Error Handling
+# Generated Code, modify with caution
+# =========================================================
+_ts() { date +"%Y-%m-%d %H:%M:%S"; }
+ptek_err() { COLOR_RED="\033[31m"; COLOR_RESET="\033[0m"; echo -e "${COLOR_RED}[$(_ts)] ERROR: $*${COLOR_RESET}" >&2; }
 
-PTEK_CALLER_PWD="$(pwd)"
-ptekwp_cleanup() {
-  cd "$PTEK_CALLER_PWD" || true
-}
-trap ptekwp_cleanup EXIT
+CALLER_PWD="$(pwd)"
+trap 'ptek_err "Command failed (exit $?): $BASH_COMMAND"' ERR
+trap 'cd "$CALLER_PWD" || true' EXIT
+# ====<<Error Handling=====================================
 
-# ------------------------------------------------------------------------------
-# Load app config + logging
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Resolve APP_BASE (canonical pattern)
+# -----------------------------------------------------------------------------
+PTEK_APP_BASE="$(
+  cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd
+)"
+export PTEK_APP_BASE
 
-APP_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# ====App Config>>=========================================
+# Source App Configuration Library
+# Defines PTEKWPCFG settngs dictionary. Adds appcfg 'key' accessor function
+# Generated Code, modify with caution
+# =========================================================
 
 # shellcheck source=/dev/null
-source "${APP_BASE}/lib/app_config.sh"
+source "${PTEK_APP_BASE}/lib/app_config.sh"
+
+# ====<<App Config=========================================
 
 # Major script → initialize its own logfile
 set_log --truncate "$(appcfg app_log_dir)/app_deploy.log" \
@@ -57,11 +69,11 @@ set_log --truncate "$(appcfg app_log_dir)/app_deploy.log" \
 
 CONFIG_BASE="$(appcfg config_base)"
 
-DOCKER_SRC_DIR="${APP_BASE}/config/docker"
+DOCKER_SRC_DIR="${PTEK_APP_BASE}/config/docker"
 DOCKER_DST_DIR="${CONFIG_BASE}/docker"
 
 # Env + container config live under app/config and config/
-APP_ENV_CONFIG_DIR="${APP_BASE}/app/config"
+APP_ENV_CONFIG_DIR="${PTEK_APP_BASE}/app/config"
 CONFIG_CONFIG_DIR="${CONFIG_BASE}/config"
 
 PROJECTS_TPL="$APP_ENV_CONFIG_DIR/projects.tpl.json"
@@ -76,7 +88,7 @@ ACTION=""
 
 usage() {
   cat <<EOF
-Usage: app_deploy.sh -a {init|up|down|reset} [-w]
+Usage: app_deploy.sh -a {init|up|down|reset} [-w | --what-if]
 
 Actions:
   init   Generate projects.json, deploy templates, generate .env, start containers
@@ -139,7 +151,7 @@ generate_projects_json() {
 }
 
 # ------------------------------------------------------------------------------
-# Deploy env templates from APP_BASE/app/config → CONFIG_BASE/config
+# Deploy env templates from PTEK_APP_BASE/app/config → CONFIG_BASE/config
 # ------------------------------------------------------------------------------
 
 deploy_env_templates() {
@@ -173,7 +185,7 @@ deploy_env_templates() {
 }
 
 # ------------------------------------------------------------------------------
-# Deploy Docker templates APP_BASE/config/docker → CONFIG_BASE/docker
+# Deploy Docker templates PTEK_APP_BASE/config/docker → CONFIG_BASE/docker
 # ------------------------------------------------------------------------------
 
 deploy_docker_templates() {
@@ -215,13 +227,13 @@ deploy_docker_templates() {
 }
 
 # ------------------------------------------------------------------------------
-# Deploy container config directories APP_BASE/config → CONFIG_BASE/config
+# Deploy container config directories PTEK_APP_BASE/config → CONFIG_BASE/config
 # ------------------------------------------------------------------------------
 
 deploy_container_configs() {
-  info "Deploying container config directories from ${APP_BASE}/config → ${CONFIG_CONFIG_DIR}"
+  info "Deploying container config directories from ${PTEK_APP_BASE}/config → ${CONFIG_CONFIG_DIR}"
 
-  local src="${APP_BASE}/config"
+  local src="${PTEK_APP_BASE}/config"
   local dst="${CONFIG_CONFIG_DIR}"
 
   local dirs=(

@@ -213,6 +213,18 @@ for DIR in "$CONFIG_BASE" "$PROJECT_BASE" "$APP_BASE/app/logs"; do
     fi
 done
 
+# --- Step 8: Publish app.json to CONFIG_BASE/config ---------------------------
+RUNTIME_CONFIG_DIR="$CONFIG_BASE/config"
+RUNTIME_APP_JSON="$RUNTIME_CONFIG_DIR/app.json"
+
+if [[ $USE_WHATIF -eq 1 ]]; then
+    echo "[WHAT-IF] Would copy app.json → $RUNTIME_APP_JSON"
+else
+    mkdir -p "$RUNTIME_CONFIG_DIR"
+    cp "$APP_JSON_PATH" "$RUNTIME_APP_JSON"
+    [[ $USE_VERBOSE -eq 1 ]] && ok "Published app.json → $RUNTIME_APP_JSON"
+fi
+
 # --- Final Output -------------------------------------------------------------
 if [[ $USE_WHATIF -eq 1 ]]; then
     ok "[WHAT-IF] Bootstrap completed (no changes made)."
