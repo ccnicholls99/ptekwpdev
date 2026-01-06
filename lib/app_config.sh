@@ -60,6 +60,11 @@ fi
 # ------------------------------------------------------------------------------
 
 CONFIG_BASE="${HOME}/.ptekwpdev"
+if [[ ! -f "$(appcfg config_base)/config/app.json" ]]; then
+    error "Runtime app.json not found. Run app_bootstrap.sh first."
+    exit 1
+fi
+
 APP_JSON="${CONFIG_BASE}/config/app.json"
 
 if [[ ! -f "$APP_JSON" ]]; then
