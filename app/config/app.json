@@ -18,7 +18,8 @@
   },
   "assets": {
     "container": "ptekwpdev_assets",
-    "root_path": "/usr/src/ptekwpdev/assets"
+    "root_path": "/usr/src/ptekwpdev/assets",
+    "volume_name": "ptekwpdev_assets_vol"
   },
   "wordpress_defaults": {
     "image": "wordpress:latest",
