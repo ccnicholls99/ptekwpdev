@@ -89,7 +89,7 @@ done < <(
 appcfg() {
   local key="$1"
   if [[ -z "${PTEKWPCFG[$key]+_}" ]]; then
-    error "Config key not found: $key"
+    echo "ERRORR: Config key not found: $key"
     return 1
   fi
   printf '%s\n' "${PTEKWPCFG[$key]}"
