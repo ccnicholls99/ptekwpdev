@@ -32,6 +32,18 @@ trap 'ptek_err "Command failed (exit $?): $BASH_COMMAND"' ERR
 trap 'cd "$CALLER_PWD" || true' EXIT
 # ====<<Error Handling=====================================
 
+# ====Log Handling>>=======================================
+# Source Log Handling
+# Set PTEK_LOGFILE before sourcing to set logfile (default=/dev/null)
+# Else call set_log [options] <logfile>, post sourcing
+# Generated Code, modify with caution
+# =========================================================
+
+# shellcheck source=/dev/null
+source "${PTEK_APP_BASE}/lib/output.sh"
+
+# ====<<Log Handling=======================================
+
 # ====App Config>>=========================================
 # shellcheck source=/dev/null
 source "${PTEK_APP_BASE}/lib/app_config.sh"
@@ -70,19 +82,16 @@ done
 # ------------------------------------------------------------------------------
 # Verbose wrappers — boolean-safe, strict-mode-safe
 # ------------------------------------------------------------------------------
-vinfo()    { if [[ $USE_VERBOSE == true ]]; then info "$*"; fi; }
-vsuccess() { if [[ $USE_VERBOSE == true ]]; then success "$*"; fi; }
-vwarn()    { if [[ $USE_VERBOSE == true ]]; then warn "$*"; fi; }
-verror()   { if [[ $USE_VERBOSE == true ]]; then error "$*"; fi; }
+vinfo()    { if [[ $USE_VERBOSE == true ]]; then info "$@"; fi; }
+vsuccess() { if [[ $USE_VERBOSE == true ]]; then success "$@"; fi; }
+vwarn()    { if [[ $USE_VERBOSE == true ]]; then warn "$@"; fi; }
+verror()   { if [[ $USE_VERBOSE == true ]]; then error "$@"; fi; }
 
 # ------------------------------------------------------------------------------
 # Initialize log
 # ------------------------------------------------------------------------------
 set_log --truncate "$(appcfg app_log_dir)/app_healthcheck.log" \
   "=== App Healthcheck Run ($(date)) ==="
-
-test_sym=$(appcfg dummy_token) && true
-echo "Test Config Entry=$test_sym"
 
 # ------------------------------------------------------------------------------
 # Load compose file for container detection
@@ -94,8 +103,8 @@ if [[ ! -f "$COMPOSE_FILE" ]]; then
 fi
 
 # Extract container names
-DB_CONTAINER="$(grep -E 'container_name:' "$COMPOSE_FILE" | grep -E 'db' | awk '{print $2}' || true)"
-ADMIN_CONTAINER="$(grep -E 'container_name:' "$COMPOSE_FILE" | grep -E 'admin' | awk '{print $2}' || true)"
+DB_CONTAINER="$(appcfg database.sqldb_container)"
+ADMIN_CONTAINER="$(appcfg database.sqladmin_container)"
 
 # Fallbacks if container_name not defined
 DB_CONTAINER="${DB_CONTAINER:-ptekwpdev_db}"
@@ -287,3 +296,4 @@ echo "PROJECTS:  $PROJECTS"
 echo ""
 
 success "App healthcheck completed."
+exit 0

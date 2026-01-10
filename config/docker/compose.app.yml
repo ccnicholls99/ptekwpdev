@@ -3,7 +3,7 @@
 services:
   sqldb:
     image: mysql:8.0
-    container_name: ptekwpdev_db
+    container_name: ${SQLDB_CONTAINER}
     environment:
       MYSQL_ROOT_PASSWORD: ${SQLDB_ROOT_PASS}
     volumes:
@@ -16,7 +16,7 @@ services:
 
   sqladmin:
     image: adminer
-    container_name: ptekwpdev_admin
+    container_name: ${SQLADMIN_CONTAINER}
     ports:
       - "${SQLADMIN_PORT}:8080"
     networks:
