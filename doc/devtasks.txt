@@ -124,6 +124,12 @@
     - Default behavior becomes append mode
     - Truncate only when -t / --truncate is explicitly provided
 
-[ ] TODO: Make expected assets subdirectories config-driven in assets_healthcheck.sh
+[ ] Make expected assets subdirectories config-driven in assets_healthcheck.sh
+
+[ ] Make assets compose file use an .env which should match config entries in 
+      app/config/app.config -> app/config/app.json
+            assets.volume_name
+            assets.container
+            assets.root_path
 
 # Add new tasks below this line

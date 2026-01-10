@@ -107,6 +107,7 @@ declare -A SUMMARY=(
   [volume]="PENDING"
   [structure]="PENDING"
   [permissions]="PENDING"
+  [sync_check]="PENDING"
 )
 
 # ------------------------------------------------------------------------------
@@ -220,6 +221,70 @@ check_permissions() {
 }
 
 # ------------------------------------------------------------------------------
+# ENV + Compose Sync Check
+# ------------------------------------------------------------------------------
+assets_config_check() {
+  vinfo "Checking .env and compose file sync..."
+
+  ENV_FILE="${ASSETS_DOCKER_DIR}/.env"
+  COMPOSE_FILE="${ASSETS_DOCKER_DIR}/compose.assets.yml"
+
+  SYNC_OK=true
+
+  # 1. Ensure .env exists
+  if [[ ! -f "$ENV_FILE" ]]; then
+    verror ".env file missing: $ENV_FILE"
+    SYNC_OK=false
+  else
+    vsuccess ".env file present"
+  fi
+
+  # 2. Extract all ${VAR} placeholders from compose file
+  mapfile -t compose_vars < <(grep -o '\${[^}]*}' "$COMPOSE_FILE" | tr -d '${}')
+
+  # 3. Extract all VAR= entries from .env
+  mapfile -t env_vars < <(cut -d= -f1 "$ENV_FILE")
+
+  # 4. Check each compose var exists in .env
+  for var in "${compose_vars[@]}"; do
+    if ! printf '%s\n' "${env_vars[@]}" | grep -qx "$var"; then
+      verror "Missing variable in .env: $var"
+      SYNC_OK=false
+    else
+      vsuccess "Variable present: $var"
+    fi
+  done
+
+  # 5. Check each .env var exists in compose file
+  for var in "${env_vars[@]}"; do
+    if ! printf '%s\n' "${compose_vars[@]}" | grep -qx "$var"; then
+      vwarn "Variable in .env not used in compose: $var"
+    fi
+  done
+
+  # 6. Check values match PTEKWPCFG
+  for var in "${env_vars[@]}"; do
+    expected="$(appcfg "${var,,}")" || expected=""
+    actual="$(grep "^${var}=" "$ENV_FILE" 2>/dev/null || true)"
+    actual="${actual#*=}"
+
+    if [[ -n "$expected" && "$expected" != "$actual" ]]; then
+      verror "Value mismatch for $var: expected '$expected', found '$actual'"
+      SYNC_OK=false
+    fi
+  done
+
+  if $SYNC_OK; then
+    vsuccess ".env and compose file are in sync"
+    SUMMARY[sync_check]="OK"
+
+  else
+    verror ".env and compose file are NOT in sync"
+    SUMMARY[sync_check]="FAIL"
+  fi  
+}
+
+# ------------------------------------------------------------------------------
 # Run all checks
 # ------------------------------------------------------------------------------
 vinfo "Starting assets healthcheck..."
@@ -230,6 +295,7 @@ check_container_running
 check_volume_exists
 check_assets_structure
 check_permissions
+assets_config_check
 
 # ------------------------------------------------------------------------------
 # Summary (always printed)
@@ -243,6 +309,7 @@ printf "Running:           %s\n" "${SUMMARY[container_running]}"
 printf "Volume:            %s\n" "${SUMMARY[volume]}"
 printf "Structure:         %s\n" "${SUMMARY[structure]}"
 printf "Permissions:       %s\n" "${SUMMARY[permissions]}"
+printf "Env/Compose Sync:  %s\n" "${SUMMARY[sync_check]}"
 
 echo ""
 

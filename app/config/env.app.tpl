@@ -22,7 +22,7 @@ SQLDB_ROOT_PASS={{secrets.sqldb_root_pass}}
 # ----------------------------------------------------------------------
 # SQL Admin (phpMyAdmin)
 # ----------------------------------------------------------------------
-SQLADMIN_CONTAINER={{database.admin_container}}
+SQLADMIN_CONTAINER={{database.sqladmin_container}}
 SQLADMIN_IMAGE={{database.sqladmin_image}}
 SQLADMIN_VERSION={{database.sqladmin_version}}
 SQLADMIN_PORT={{database.sqladmin_port}}

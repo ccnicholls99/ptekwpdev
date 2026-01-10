@@ -14,12 +14,14 @@
     "sqldb_version": "10.5",
     "sqladmin_image": "phpmyadmin/phpmyadmin",
     "sqladmin_version": "latest",
-    "sqladmin_port": "5211"
+    "sqladmin_port": "5211",
+    "sqldb_container": "ptekwpdev_db",
+    "sqladmin_container": "ptekwpdev_admin"
   },
   "assets": {
     "container": "ptekwpdev_assets",
     "root_path": "/usr/src/ptekwpdev/assets",
-    "volume_name": "ptekwpdev_assets_vol"
+    "volume_name": "ptekwpdev_assets_volume"
   },
   "wordpress_defaults": {
     "image": "wordpress:latest",

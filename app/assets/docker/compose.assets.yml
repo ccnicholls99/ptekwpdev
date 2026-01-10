@@ -1,14 +1,14 @@
 services:
   ptekwpdev-assets:
-    container_name: ptekwpdev_assets
+    container_name: ${ASSETS_CONTAINER}
     build:
       context: .
       dockerfile: Dockerfile
     command: tail -f /dev/null   # 👈 keeps the container running
     volumes:
-      - ptekwpdev_assets_volume:/usr/src/ptekwpdev/assets   # 👈 named volume
+      - ${ASSETS_VOLUME}:${ASSETS_ROOT}   # 👈 named volume 
     restart: unless-stopped
 
 volumes:
   ptekwpdev_assets_volume:   # 👈 declare the volume
-    name: ptekwpdev_assets_volume
+    name: ${ASSETS_VOLUME}
