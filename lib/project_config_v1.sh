@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ===================================================================
+#  *** Deprecated — retained for reference only ***
 #  project_config.sh
 #  Load project-level configuration from projects.json into a private
 #  dictionary, exposing ONLY prjcfg() as a public accessor.
@@ -9,6 +10,10 @@
 #  - Uses ONLY logging functions from APP_BASE/lib/output.sh
 #  - No exports, no global leakage, no side effects
 # ===================================================================
+
+#  *** Deprecated — retained for reference only ***
+echo "project_config_v1 is deprecated — retained for reference only. Use project_config.sh instead"
+exit 0
 
 set -euo pipefail
 

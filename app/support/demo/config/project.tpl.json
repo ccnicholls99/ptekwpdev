@@ -1,0 +1,7 @@
+{
+  "project_title": "Demo Project",
+  "project_description": "A minimal demonstration project for PTEKWPDEV.",
+  "project_domain": "demo.local",
+  "project_network": "ptekwpdev_demo_net",
+  "base_dir": "demo"
+}
