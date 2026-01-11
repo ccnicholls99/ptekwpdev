@@ -68,6 +68,7 @@ This is optional, but useful for future automation or documentation.
 
 ### 🧩 Demo Plugin: `.../wordpress/templates/plugins/demo/...`
 📄 demo.php
+```php
 <?php
 /**
  * Plugin Name: Demo Plugin
@@ -78,14 +79,15 @@ This is optional, but useful for future automation or documentation.
 add_action('init', function () {
     error_log("Demo Plugin Loaded");
 });
-
+```
 
 📄 readme.txt
+```
 Demo Plugin
 ===========
 
 A minimal plugin used by the PTEKWPDEV demo project.
-
+```
 
 
 ### 🎨 Demo Theme: .../wordpress/templates/themes/demo/...
