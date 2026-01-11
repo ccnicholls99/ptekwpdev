@@ -298,6 +298,10 @@ git_check() {
   info "Git available: $version"
 }
 
+ptek_generate_secret() {
+  head -c 32 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 16
+}
+
 # === Dev code deployment ===
 deploy_dev_code() {
   local source="$1"

@@ -1,0 +1,21 @@
+# Project Root Keys  
+project_domain
+project_network
+base_dir
+project_title
+project_description
+# Wordpress Settings
+wordpress.image
+wordpress.host
+wordpress.port
+wordpress.ssl_port
+# Secrets
+secrets.sqldb_name
+secrets.sqldb_user
+secrets.sqldb_pass
+secrets.wp_admin_user
+secrets.wp_admin_pass
+secrets.wp_admin_email
+# Development Sources
+dev_sources.plugins
+dev_sources.themes
