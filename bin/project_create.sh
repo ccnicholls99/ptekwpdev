@@ -60,10 +60,6 @@ source "${PTEK_APP_BASE}/lib/app_config.sh"
 source "${PTEK_APP_BASE}/lib/helpers.sh"
 # ====<<Helpers============================================
 
-# ====Project Config>>=====================================
-# shellcheck source=/dev/null
-source "${PTEK_APP_BASE}/lib/project_config.sh"
-# ====<<Project Config=====================================
 
 # ------------------------------------------------------------------------------
 # Usage
@@ -161,6 +157,11 @@ if ! [[ "$PROJECT" =~ ^[a-z0-9_]+$ ]]; then
   exit 1
 fi
 
+# ====Project Config>>=====================================
+# shellcheck source=/dev/null
+source "${PTEK_APP_BASE}/lib/project_config.sh"
+# ====<<Project Config=====================================
+
 # ------------------------------------------------------------------------------
 # Compute defaults (Option A)
 # ------------------------------------------------------------------------------
@@ -173,6 +174,8 @@ DEFAULT_WP_IMAGE="$(appcfg wordpress_defaults.image)"
 DEFAULT_WP_HOST="${PROJECT}.local"
 DEFAULT_PORT="$(appcfg wordpress_defaults.port)"
 DEFAULT_SSL_PORT="$(appcfg wordpress_defaults.ssl_port)"
+DEFAULT_WP_CONTAINER="${PROJECT}_wp"
+DEFAULT_WP_VOLUME="${PROJECT}_wp_vol"
 
 PROJECT_TITLE="${PROJECT_TITLE:-$DEFAULT_TITLE}"
 PROJECT_DESCRIPTION="${PROJECT_DESCRIPTION:-$DEFAULT_DESCRIPTION}"
@@ -183,6 +186,8 @@ WP_IMAGE="${WP_IMAGE:-$DEFAULT_WP_IMAGE}"
 WP_HOST="${WP_HOST:-$DEFAULT_WP_HOST}"
 PORT="${PORT:-$DEFAULT_PORT}"
 SSL_PORT="${SSL_PORT:-$DEFAULT_SSL_PORT}"
+WP_CONTAINER="${WP_CONTAINER:-$DEFAULT_WP_CONTAINER}"
+WP_VOLUME="${WP_VOLUME:-$DEFAULT_WP_VOLUME}"
 
 # ------------------------------------------------------------------------------
 # Responsive mode: show defaults and allow overrides
@@ -198,6 +203,8 @@ if [[ $RESPONSIVE == true ]]; then
   echo "  WP Host:   $WP_HOST"
   echo "  HTTP port: $PORT"
   echo "  HTTPS port:$SSL_PORT"
+  echo "  WP Container Name:  $WP_CONTAINER"
+  echo "  WP Volume Name:     $WP_VOLUME"
   echo
 
   read -rp "Change any of these? (y/n): " change
@@ -211,8 +218,10 @@ if [[ $RESPONSIVE == true ]]; then
     read -rp "WordPress host [$WP_HOST]: " input; WP_HOST="${input:-$WP_HOST}"
     read -rp "HTTP port [$PORT]: " input; PORT="${input:-$PORT}"
     read -rp "HTTPS port [$SSL_PORT]: " input; SSL_PORT="${input:-$SSL_PORT}"
+    read -rp "WP Container [$WP_CONTAINER]: " input; WP_CONTAINER="${input:-$WP_CONTAINER}"
+    read -rp "WP Volume [$WP_VOLUME]: " input; WP_VOLUME="${input:-$WP_VOLUME}"
   fi
-else
+elif [[ $WHAT_IF == true ]]; then
   whatif "Using defaults unless overridden by flags."
 fi
 
@@ -253,6 +262,8 @@ project_block=$(jq -n \
   --arg wphost "$WP_HOST" \
   --arg port "$PORT" \
   --arg ssl_port "$SSL_PORT" \
+  --arg wp_container "$WP_CONTAINER" \
+  --arg wp_volume "$WP_VOLUME" \
   --arg dbname "$SQLDB_NAME" \
   --arg dbuser "$SQLDB_USER" \
   --arg dbpass "$SQLDB_PASS" \
@@ -272,8 +283,8 @@ project_block=$(jq -n \
       host: $wphost,
       port: $port,
       ssl_port: $ssl_port,
-      container: null,
-      volume: null,
+      container_name: $wp_container,
+      volume_name: $wp_volume,
       root_path: null,
       core_path: null,
       php_ini: null,
@@ -385,6 +396,8 @@ echo "Network:   $NETWORK"
 echo "Base dir:  $BASE_DIR"
 echo "WP Image:  $WP_IMAGE"
 echo "Ports:     $PORT / $SSL_PORT"
+echo "Container: $WP_CONTAINER"
+echo "Volume:    $WP_VOLUME"
 echo "Auto Deploy: $AUTO_DEPLOY"
 echo "Auto Launch: $AUTO_LAUNCH"
 echo

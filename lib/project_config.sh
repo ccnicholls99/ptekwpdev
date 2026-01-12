@@ -19,7 +19,6 @@
 #   - Allows contributor-defined extra keys beyond the minimum schema
 #
 # ====<<Summary=================================================================
-
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -86,7 +85,7 @@ source "${PTEK_APP_BASE}/lib/helpers.sh"
 # ------------------------------------------------------------------------------
 # Load minimum required project keys
 # ------------------------------------------------------------------------------
-_PTEKPRCFG_SCHEMA_FILE="${PTEK_APP_BASE}/config/schema/prj_config_min_keys"
+_PTEKPRCFG_SCHEMA_FILE="${PTEK_APP_BASE}/app/config/schema/prj_config_min_keys"
 
 if [[ -f "$_PTEKPRCFG_SCHEMA_FILE" ]]; then
     while IFS= read -r key; do
@@ -168,14 +167,14 @@ prjcfg() {
 }
 
 # ------------------------------------------------------------------------------
-# Public: project_add(key, dict)
-#   - key: project key
-#   - dict: JSON object (already validated by caller)
-#   - Validates dict contains minimum required keys
+# Public: project_add(key, json)
+#   - key:  project key
+#   - json: JSON object string
+#   - Validates json contains minimum required keys
 # ------------------------------------------------------------------------------
 project_add() {
     local key="$1"
-    local dict="$2"
+    local json="$2"
 
     local file
     file="$(appcfg config_base)/config/projects.json"
@@ -185,13 +184,18 @@ project_add() {
         return 1
     fi
 
-    # Validate required keys exist in dict
+    # Validate required keys exist in json
     local missing=false
     for req in "${!_PTEKPRCFG_MIN_KEYS[@]}"; do
-        if ! jq -e --arg r "$req" 'has($r)' <<< "$dict" >/dev/null; then
-            verror "Missing required project key: $req"
+        # Convert "a.b.c" → ["a","b","c"]
+        local jq_path
+        jq_path=$(jq -n --arg p "$req" '$p | split(".")')
+
+        # Check nested key exists
+        if ! jq -e --argjson path "$jq_path" 'getpath($path) != null' <<< "$json" >/dev/null; then
+            error "Missing required project key: $req"
             missing=true
-        fi
+        fi    
     done
 
     if [[ "$missing" == true ]]; then
@@ -203,10 +207,10 @@ project_add() {
     local tmp
     tmp="$(mktemp)"
 
-    jq ".projects.\"${key}\" = ${dict}" "$file" > "$tmp"
+    jq ".projects.\"${key}\" = ${json}" "$file" > "$tmp"
     mv "$tmp" "$file"
 
-    vsuccess "Project '$key' added to projects.json"
+    success "Project '$key' added to projects.json"
 }
 
 # ------------------------------------------------------------------------------
