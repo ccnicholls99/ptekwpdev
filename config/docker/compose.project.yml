@@ -9,7 +9,7 @@ services:
         WORDPRESS_IMAGE: ${WORDPRESS_IMAGE}
     container_name: ${PROJECT_NAME}_wp
     environment:
-      WORDPRESS_DB_HOST: ${SQLDB_HOST}
+      WORDPRESS_DB_HOST: sqldb #${SQLDB_HOST}
       WORDPRESS_DB_USER: ${SQLDB_USER}
       WORDPRESS_DB_PASSWORD: ${SQLDB_PASSWORD}
       WORDPRESS_DB_NAME: ${SQLDB_NAME}
@@ -17,8 +17,8 @@ services:
       #- ${PROJECT_BASE}/wordpress:/var/www/html/wp-content
       - ptekwpdev_assets_volume:/var/www/html/wp-content
     networks:
-      - frontend
-      - backend
+      - frontend_network
+      - backend_network
     restart: unless-stopped
 
   wpcli:
@@ -34,8 +34,7 @@ services:
     volumes:
       - ptekwpdev_assets_volume:/var/www/html/wp-content
     networks:
-      - frontend
-      - backend
+      - frontend_network
     entrypoint: wp
 
   proxy:
@@ -50,7 +49,7 @@ services:
       - ${PROJECT_BASE}/config/proxy/default.conf.template:/etc/nginx/templates/default.conf.template:ro
       - ${PROJECT_BASE}/config/proxy/certs:/etc/nginx/certs:ro
     networks:
-      - frontend
+      - frontend_network
     ports:
       - "${WORDPRESS_PORT}:80"
       - "${WORDPRESS_SSL_PORT:-443}:443"
@@ -60,11 +59,11 @@ volumes:
   ptekwpdev_assets_volume:
 
 networks:
-  frontend:
+  frontend_network:
     name: ${FRONTEND_NETWORK}
     driver: bridge
 
-  backend:
+  backend_network:
     external: true
     name: ${BACKEND_NETWORK}
 
